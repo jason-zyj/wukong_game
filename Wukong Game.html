@@ -1,0 +1,1645 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>砖块大王 — 孙悟空创作游戏</title>
+  <!-- React + ReactDOM from CDN -->
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <!-- Babel so the browser understands JSX directly -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #0D0820; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    // ── Pull React hooks into scope (no import needed with CDN) ──
+    const { useState, useEffect, useRef, useCallback } = React;
+
+// ──────────────────────────────────────────────
+// 样式注入（CSS 关键帧 + 游戏样式）
+// ──────────────────────────────────────────────
+const STYLE_SHEET = `
+  @import url('https://fonts.googleapis.com/css2?family=Fredoka+One&family=Noto+Sans+SC:wght@400;700;900&display=swap');
+
+  :root {
+    --gold: #FFD700;
+    --gold-dark: #D4A017;
+    --red: #E8372A;
+    --red-dark: #B02A20;
+    --orange: #FF6B35;
+    --ink: #1A0A00;
+    --sky: #7EC8E3;
+    --jade: #3CB371;
+    --cream: #FFF8E7;
+    --brick-shadow: 0 4px 0 rgba(0,0,0,0.35), 0 6px 12px rgba(0,0,0,0.2);
+    --brick-shadow-sm: 0 2px 0 rgba(0,0,0,0.35);
+    --inner-glow: inset 0 1px 0 rgba(255,255,255,0.35);
+  }
+
+  * { box-sizing: border-box; }
+
+  body, #root { margin: 0; padding: 0; font-family: 'Noto Sans SC', 'Nunito', sans-serif; }
+
+  .game-root {
+    min-height: 100vh;
+    background: linear-gradient(160deg, #0D0820 0%, #1A1040 40%, #0D1830 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0 8px 40px;
+    overflow-x: hidden;
+  }
+
+  .game-title {
+    font-family: 'Fredoka One', 'Noto Sans SC', cursive;
+    font-size: clamp(1.6rem, 5vw, 2.8rem);
+    color: var(--gold);
+    text-shadow: 3px 3px 0 var(--red-dark), 0 0 30px rgba(255,215,0,0.4);
+    letter-spacing: 0.04em;
+    margin: 0;
+    line-height: 1;
+  }
+
+  /* ── 导航栏 ── */
+  .nav-bar {
+    display: flex;
+    gap: 6px;
+    background: rgba(0,0,0,0.4);
+    border-radius: 16px;
+    padding: 6px;
+    border: 2px solid rgba(255,215,0,0.2);
+  }
+
+  .nav-btn {
+    font-family: 'Noto Sans SC', sans-serif;
+    font-weight: 900;
+    font-size: 0.85rem;
+    border: none;
+    border-radius: 10px;
+    padding: 8px 14px;
+    cursor: pointer;
+    transition: all 0.15s;
+    position: relative;
+    letter-spacing: 0.02em;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .nav-btn.active {
+    background: var(--gold);
+    color: var(--ink);
+    box-shadow: var(--brick-shadow);
+    transform: translateY(-1px);
+  }
+
+  .nav-btn:not(.active) {
+    background: rgba(255,255,255,0.07);
+    color: rgba(255,255,255,0.5);
+  }
+
+  .nav-btn:not(.active):hover {
+    background: rgba(255,255,255,0.14);
+    color: rgba(255,255,255,0.8);
+  }
+
+  .nav-btn .badge {
+    background: var(--red);
+    color: white;
+    border-radius: 6px;
+    font-size: 0.65rem;
+    padding: 1px 5px;
+  }
+
+  /* ── 砖块按钮 ── */
+  .brick-btn {
+    font-family: 'Noto Sans SC', sans-serif;
+    font-weight: 900;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.12s;
+    box-shadow: var(--brick-shadow);
+    position: relative;
+    top: 0;
+    letter-spacing: 0.03em;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+
+  .brick-btn:hover { transform: translateY(-2px); filter: brightness(1.08); }
+  .brick-btn:active { top: 3px; box-shadow: var(--brick-shadow-sm); transform: translateY(0); }
+
+  .brick-btn.gold  { background: linear-gradient(180deg, #FFE566 0%, var(--gold) 50%, #C8A800 100%); color: var(--ink); }
+  .brick-btn.red   { background: linear-gradient(180deg, #FF5545 0%, var(--red) 50%, var(--red-dark) 100%); color: white; }
+  .brick-btn.jade  { background: linear-gradient(180deg, #50D890 0%, var(--jade) 50%, #2A7A50 100%); color: white; }
+  .brick-btn.sky   { background: linear-gradient(180deg, #A0DCEF 0%, var(--sky) 50%, #5AA8C0 100%); color: var(--ink); }
+  .brick-btn.dark  { background: linear-gradient(180deg, #3A3060 0%, #1A1040 100%); color: white; border: 2px solid rgba(255,215,0,0.3); }
+
+  .brick-btn.lg { font-size: 1.05rem; padding: 12px 24px; border-radius: 12px; }
+  .brick-btn.md { font-size: 0.9rem;  padding: 9px 18px;  border-radius: 10px; }
+  .brick-btn.sm { font-size: 0.78rem; padding: 6px 12px;  border-radius: 8px; }
+
+  /* ── 面板卡片 ── */
+  .panel {
+    background: rgba(255,255,255,0.05);
+    border: 1.5px solid rgba(255,215,0,0.15);
+    border-radius: 18px;
+    backdrop-filter: blur(6px);
+  }
+
+  /* ── 建造模式 ── */
+  .build-layout {
+    display: grid;
+    grid-template-columns: 220px 1fr 220px;
+    gap: 12px;
+    width: 100%;
+    max-width: 860px;
+  }
+
+  .zone-grid {
+    display: grid;
+    grid-template-areas:
+      ". head ."
+      "larm torso rarm"
+      ". legs ."
+      ". mount .";
+    gap: 6px;
+    align-self: start;
+  }
+
+  .zone-btn {
+    font-family: 'Noto Sans SC', sans-serif;
+    font-weight: 900;
+    font-size: 0.78rem;
+    border: 2.5px dashed rgba(255,215,0,0.3);
+    border-radius: 12px;
+    padding: 10px 6px;
+    cursor: pointer;
+    background: rgba(255,255,255,0.04);
+    color: rgba(255,255,255,0.55);
+    transition: all 0.15s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    min-width: 70px;
+    line-height: 1.1;
+  }
+
+  .zone-btn.filled {
+    border-style: solid;
+    border-color: var(--gold);
+    background: rgba(255,215,0,0.08);
+    color: var(--gold);
+  }
+
+  .zone-btn.selected {
+    border-color: var(--orange);
+    background: rgba(255,107,53,0.15);
+    color: var(--orange);
+    box-shadow: 0 0 12px rgba(255,107,53,0.4);
+  }
+
+  .zone-btn:hover { border-color: var(--gold); color: var(--gold); background: rgba(255,215,0,0.06); }
+
+  /* ── 零件调色板 ── */
+  .parts-palette {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .part-tile {
+    border-radius: 12px;
+    padding: 12px 8px;
+    cursor: pointer;
+    border: 2.5px solid transparent;
+    transition: all 0.15s;
+    text-align: center;
+    background: rgba(255,255,255,0.05);
+  }
+
+  .part-tile:hover { transform: translateY(-2px); border-color: rgba(255,215,0,0.5); }
+  .part-tile.selected { border-color: var(--gold); background: rgba(255,215,0,0.12); box-shadow: 0 0 12px rgba(255,215,0,0.3); }
+
+  .part-icon { font-size: 2rem; }
+  .part-name { font-size: 0.7rem; font-weight: 900; color: white; margin-top: 3px; font-family: 'Noto Sans SC', sans-serif; }
+  .part-label { font-size: 0.6rem; color: rgba(255,255,255,0.4); margin-top: 1px; }
+
+  /* ── 角色展示 ── */
+  .char-display {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .char-frame {
+    background: radial-gradient(ellipse at 50% 60%, rgba(255,215,0,0.08) 0%, transparent 70%);
+    border-radius: 20px;
+    border: 1.5px solid rgba(255,215,0,0.12);
+    padding: 12px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .char-frame::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg, transparent, transparent 24px,
+      rgba(255,255,255,0.015) 24px, rgba(255,255,255,0.015) 25px
+    );
+    pointer-events: none;
+  }
+
+  /* ── 扫描模式 ── */
+  .scan-screen {
+    position: relative;
+    overflow: hidden;
+    border-radius: 20px;
+  }
+
+  .scan-line {
+    position: absolute;
+    left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, transparent, var(--sky), #00FFFF, var(--sky), transparent);
+    box-shadow: 0 0 20px #00FFFF, 0 0 40px #00FFFF80;
+    animation: scanSweep 1.8s ease-in-out infinite;
+    pointer-events: none;
+  }
+
+  @keyframes scanSweep {
+    0%   { top: 0%; opacity: 0; }
+    10%  { opacity: 1; }
+    90%  { opacity: 1; }
+    100% { top: 100%; opacity: 0; }
+  }
+
+  .scan-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg,
+      rgba(0,200,255,0.08) 0%,
+      transparent 40%,
+      transparent 60%,
+      rgba(0,200,255,0.08) 100%
+    );
+    animation: scanPulse 1.8s ease-in-out infinite;
+  }
+
+  @keyframes scanPulse {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 1; }
+  }
+
+  .progress-bar-track {
+    background: rgba(0,0,0,0.4);
+    border-radius: 999px;
+    border: 2px solid rgba(255,215,0,0.2);
+    overflow: hidden;
+    height: 18px;
+  }
+
+  .progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--jade), var(--sky), var(--gold));
+    border-radius: 999px;
+    transition: width 0.1s linear;
+    box-shadow: 0 0 12px rgba(0,200,255,0.6);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .progress-bar-fill::after {
+    content: '';
+    position: absolute;
+    top: 0; left: -60%; width: 40%; height: 100%;
+    background: rgba(255,255,255,0.3);
+    animation: shimmer 1.2s infinite;
+  }
+
+  @keyframes shimmer { 100% { left: 120%; } }
+
+  /* ── 展示模式 ── */
+  .stage-bg {
+    background: radial-gradient(ellipse at 50% 80%, rgba(255,100,0,0.15) 0%, rgba(50,0,100,0.3) 40%, transparent 70%),
+                linear-gradient(180deg, #0D0820 0%, #1A0830 100%);
+    border-radius: 20px;
+    border: 2px solid rgba(255,215,0,0.2);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .stage-spotlight {
+    position: absolute;
+    top: -20%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 300px;
+    height: 500px;
+    background: conic-gradient(from 175deg at 50% 0%, transparent 0deg, rgba(255,215,0,0.06) 5deg, transparent 10deg);
+    pointer-events: none;
+    animation: spotlightSway 4s ease-in-out infinite;
+  }
+
+  @keyframes spotlightSway {
+    0%, 100% { transform: translateX(-50%) rotate(-3deg); }
+    50%       { transform: translateX(-50%) rotate(3deg); }
+  }
+
+  .stage-floor {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 60px;
+    background: linear-gradient(180deg, transparent 0%, rgba(255,215,0,0.06) 100%);
+    border-top: 2px solid rgba(255,215,0,0.12);
+  }
+
+  .move-btn {
+    font-family: 'Noto Sans SC', sans-serif;
+    font-weight: 900;
+    border: 2px solid rgba(255,255,255,0.15);
+    border-radius: 12px;
+    padding: 10px 14px;
+    cursor: pointer;
+    background: rgba(255,255,255,0.06);
+    color: rgba(255,255,255,0.7);
+    font-size: 0.82rem;
+    transition: all 0.15s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    letter-spacing: 0.02em;
+  }
+
+  .move-btn:hover { background: rgba(255,215,0,0.12); border-color: var(--gold); color: var(--gold); }
+
+  .move-btn.active {
+    background: rgba(255,215,0,0.2);
+    border-color: var(--gold);
+    color: var(--gold);
+    box-shadow: 0 0 16px rgba(255,215,0,0.3);
+    animation: movePulse 0.8s ease-in-out infinite;
+  }
+
+  @keyframes movePulse {
+    0%, 100% { box-shadow: 0 0 16px rgba(255,215,0,0.3); }
+    50%       { box-shadow: 0 0 28px rgba(255,215,0,0.6); }
+  }
+
+  /* ── 角色动画 ── */
+  @keyframes staffSpin {
+    0%   { transform: rotate(0deg)   translateY(0px); }
+    25%  { transform: rotate(5deg)   translateY(-6px); }
+    75%  { transform: rotate(-5deg)  translateY(-6px); }
+    100% { transform: rotate(0deg)   translateY(0px); }
+  }
+
+  @keyframes cloudJump {
+    0%, 100% { transform: translateY(0px) scaleX(1); }
+    30%       { transform: translateY(-28px) scaleX(1.05); }
+    60%       { transform: translateY(-20px) scaleX(0.97); }
+  }
+
+  @keyframes victoryPose {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    20%       { transform: translateY(-8px) rotate(-4deg); }
+    40%       { transform: translateY(-8px) rotate(4deg); }
+    60%       { transform: translateY(-4px) rotate(-2deg); }
+  }
+
+  @keyframes battleStance {
+    0%, 100% { transform: scaleX(1) translateY(0); }
+    25%       { transform: scaleX(1.04) translateY(-3px); }
+    75%       { transform: scaleX(0.97) translateY(2px); }
+  }
+
+  @keyframes somersault {
+    0%   { transform: rotate(0deg)   translateY(0px); }
+    30%  { transform: rotate(-180deg) translateY(-30px); }
+    60%  { transform: rotate(-360deg) translateY(-10px); }
+    100% { transform: rotate(-360deg) translateY(0px); }
+  }
+
+  @keyframes idleBob {
+    0%, 100% { transform: translateY(0px); }
+    50%       { transform: translateY(-4px); }
+  }
+
+  .anim-spin     { animation: staffSpin     0.8s ease-in-out infinite; }
+  .anim-jump     { animation: cloudJump     0.9s ease-in-out infinite; }
+  .anim-victory  { animation: victoryPose   1s   ease-in-out infinite; }
+  .anim-stance   { animation: battleStance  0.7s ease-in-out infinite; }
+  .anim-fly      { animation: somersault    1s   ease-in-out infinite; }
+  .anim-idle     { animation: idleBob       2.5s ease-in-out infinite; }
+
+  /* ── 定制选项 ── */
+  .custom-option {
+    border-radius: 12px;
+    padding: 10px;
+    cursor: pointer;
+    border: 2.5px solid transparent;
+    background: rgba(255,255,255,0.05);
+    transition: all 0.15s;
+    text-align: center;
+    color: white;
+  }
+
+  .custom-option:hover  { border-color: rgba(255,215,0,0.5); transform: translateY(-1px); }
+  .custom-option.active { border-color: var(--gold); background: rgba(255,215,0,0.12); box-shadow: 0 0 12px rgba(255,215,0,0.25); }
+
+  /* ── 保存/加载 弹窗 ── */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.75);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    backdrop-filter: blur(4px);
+  }
+
+  .modal-box {
+    background: linear-gradient(180deg, #1A1040 0%, #0D0820 100%);
+    border: 2px solid rgba(255,215,0,0.3);
+    border-radius: 20px;
+    padding: 24px;
+    width: min(420px, 92vw);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+  }
+
+  /* ── 提示栏 ── */
+  .hint-bar {
+    background: rgba(255,215,0,0.08);
+    border: 1.5px solid rgba(255,215,0,0.2);
+    border-radius: 10px;
+    padding: 7px 14px;
+    font-size: 0.78rem;
+    color: rgba(255,215,0,0.8);
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  /* ── 存档缩略卡片 ── */
+  .save-card {
+    background: rgba(255,255,255,0.05);
+    border: 1.5px solid rgba(255,215,0,0.2);
+    border-radius: 12px;
+    padding: 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-align: center;
+  }
+
+  .save-card:hover { border-color: var(--gold); transform: translateY(-2px); }
+
+  /* ── 标签徽章 ── */
+  .tag { background: rgba(255,255,255,0.08); border-radius: 6px; padding: 2px 8px; font-size: 0.68rem; color: rgba(255,255,255,0.5); font-weight: 700; }
+
+  /* ── 响应式 ── */
+  @media (max-width: 700px) {
+    .build-layout { grid-template-columns: 1fr; }
+    .zone-grid { margin: 0 auto; }
+  }
+
+  input.game-input {
+    background: rgba(255,255,255,0.06);
+    border: 1.5px solid rgba(255,215,0,0.3);
+    border-radius: 10px;
+    color: white;
+    font-family: 'Noto Sans SC', sans-serif;
+    font-weight: 700;
+    padding: 8px 14px;
+    font-size: 0.9rem;
+    outline: none;
+    width: 100%;
+  }
+
+  input.game-input:focus { border-color: var(--gold); box-shadow: 0 0 10px rgba(255,215,0,0.2); }
+  input.game-input::placeholder { color: rgba(255,255,255,0.25); }
+
+  .section-label {
+    font-family: 'Noto Sans SC', sans-serif;
+    font-weight: 900;
+    color: rgba(255,215,0,0.7);
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  .char-name-badge {
+    font-family: 'Noto Sans SC', sans-serif;
+    font-weight: 900;
+    font-size: 1.1rem;
+    color: var(--gold);
+    text-shadow: 0 0 12px rgba(255,215,0,0.5);
+    letter-spacing: 0.05em;
+  }
+
+  /* 星空背景 */
+  .stars-bg {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+    z-index: 0;
+  }
+
+  .star {
+    position: absolute;
+    border-radius: 50%;
+    background: white;
+    animation: twinkle var(--d, 3s) ease-in-out infinite;
+    animation-delay: var(--delay, 0s);
+  }
+
+  @keyframes twinkle {
+    0%, 100% { opacity: 0.15; transform: scale(1); }
+    50%       { opacity: 0.9;  transform: scale(1.3); }
+  }
+
+  .music-wave { display: flex; align-items: flex-end; gap: 2px; height: 18px; }
+  .music-bar {
+    width: 4px; border-radius: 2px;
+    background: var(--gold);
+    animation: musicBounce var(--d, 0.6s) ease-in-out infinite alternate;
+  }
+  @keyframes musicBounce {
+    0%   { height: 4px; }
+    100% { height: 18px; }
+  }
+`;
+
+// ──────────────────────────────────────────────
+// 数据目录（零件 / 定制 / 动作）
+// ──────────────────────────────────────────────
+
+/**
+ * 身体部位零件目录。
+ * 如需新增零件，在对应区域数组中添加条目即可。
+ */
+const PARTS_CATALOG = {
+  head: [
+    { id: "h1", name: "经典猴脸",   emoji: "🐵", color: "#C8874A", accent: "#E8A070", label: "活泼可爱" },
+    { id: "h2", name: "战士猴脸",   emoji: "😤", color: "#8B4513", accent: "#A0522D", label: "威风凛凛" },
+    { id: "h3", name: "智者猴脸",   emoji: "🧐", color: "#DEB887", accent: "#F5DEB3", label: "睿智老练" },
+    { id: "h4", name: "灵魂猴脸",   emoji: "✨", color: "#9B59B6", accent: "#BB80D0", label: "神秘莫测" },
+  ],
+  torso: [
+    { id: "t1", name: "战袍",       emoji: "👘", color: "#E8372A", accent: "#FFD700", label: "红丝绸" },
+    { id: "t2", name: "龙鳞甲",     emoji: "🛡️", color: "#FFD700", accent: "#E8372A", label: "金色" },
+    { id: "t3", name: "云衣",       emoji: "☁️", color: "#4A90D9", accent: "#87CEEB", label: "轻盈" },
+    { id: "t4", name: "虎皮袍",     emoji: "🐯", color: "#D4801A", accent: "#FFA040", label: "狂野" },
+  ],
+  leftArm: [
+    { id: "la1", name: "标准左臂", emoji: "💪", color: "#C8874A", accent: "#E8A070", label: "普通" },
+    { id: "la2", name: "强力左臂", emoji: "🦾", color: "#8B4513", accent: "#A05030", label: "强壮" },
+    { id: "la3", name: "龙爪左臂", emoji: "🐉", color: "#2E8B57", accent: "#66CDAA", label: "龙系" },
+    { id: "la4", name: "护甲左臂", emoji: "🛡️", color: "#4169E1", accent: "#87CEFA", label: "铠甲" },
+  ],
+  rightArm: [
+    { id: "ra1", name: "标准右臂", emoji: "💪", color: "#C8874A", accent: "#E8A070", label: "普通" },
+    { id: "ra2", name: "强力右臂", emoji: "🦾", color: "#8B4513", accent: "#A05030", label: "强壮" },
+    { id: "ra3", name: "龙爪右臂", emoji: "🐉", color: "#2E8B57", accent: "#66CDAA", label: "龙系" },
+    { id: "ra4", name: "护甲右臂", emoji: "🛡️", color: "#4169E1", accent: "#87CEFA", label: "铠甲" },
+  ],
+  legs: [
+    { id: "l1", name: "战姿腿",   emoji: "🦵", color: "#C8874A", accent: "#E8A070", label: "备战" },
+    { id: "l2", name: "矫健腿",   emoji: "🏃", color: "#8B4513", accent: "#A05030", label: "迅捷" },
+    { id: "l3", name: "龙鳞腿",   emoji: "🐉", color: "#2E8B57", accent: "#66CDAA", label: "龙系" },
+    { id: "l4", name: "云靴腿",   emoji: "☁️",  color: "#9370DB", accent: "#DA70D6", label: "踏云" },
+  ],
+};
+
+const ZONE_CONFIG = [
+  { id: "head",     label: "头部",   area: "head",  emoji: "😊" },
+  { id: "torso",    label: "躯干",   area: "torso", emoji: "👕" },
+  { id: "leftArm",  label: "左臂",   area: "larm",  emoji: "💪" },
+  { id: "rightArm", label: "右臂",   area: "rarm",  emoji: "💪" },
+  { id: "legs",     label: "腿部",   area: "legs",  emoji: "🦵" },
+];
+
+/**
+ * 定制选项目录。
+ * 在对应数组中添加条目可增加新选项。
+ */
+const CUSTOM_CATALOG = {
+  tail: [
+    { id: "t_curl",  name: "卷曲尾",   emoji: "🌀", color: "#C8874A" },
+    { id: "t_str",   name: "抓握尾",   emoji: "🐒", color: "#8B4513" },
+    { id: "t_flame", name: "火焰尾",   emoji: "🔥", color: "#FF4500" },
+  ],
+  staff: [
+    { id: "s_gold",  name: "金箍棒",   emoji: "✨", color: "#FFD700" },
+    { id: "s_rune",  name: "符文棒",   emoji: "📜", color: "#9B59B6" },
+    { id: "s_glow",  name: "霓虹棒",   emoji: "💡", color: "#00FFFF" },
+  ],
+  accessories: [
+    { id: "acc_crown",   name: "金冠",       emoji: "👑" },
+    { id: "acc_armor",   name: "护肩甲",     emoji: "🔰" },
+    { id: "acc_skirt",   name: "虎皮裙",     emoji: "🐯" },
+  ],
+};
+
+/**
+ * 展示动作列表。
+ * 添加新条目并在 STYLE_SHEET 中定义对应关键帧即可增加新动作。
+ */
+const MOVES = [
+  { id: "spin",    name: "棒法旋转",   emoji: "🌪️",  animClass: "anim-spin" },
+  { id: "jump",    name: "腾云驾雾",   emoji: "☁️",   animClass: "anim-jump" },
+  { id: "victory", name: "胜利姿势",   emoji: "🏆",  animClass: "anim-victory" },
+  { id: "stance",  name: "战斗准备",   emoji: "⚔️",   animClass: "anim-stance" },
+  { id: "fly",     name: "筋斗翻腾",   emoji: "🤸",  animClass: "anim-fly" },
+];
+
+// ──────────────────────────────────────────────
+// 游戏音效 Hook
+// ──────────────────────────────────────────────
+function useGameAudio() {
+  const ctxRef  = useRef(null);
+  const loopRef = useRef(null);
+
+  const getCtx = useCallback(() => {
+    if (!ctxRef.current) ctxRef.current = new (window.AudioContext || window.webkitAudioContext)();
+    return ctxRef.current;
+  }, []);
+
+  const playTone = useCallback((freq, dur = 0.12, type = "square", vol = 0.15) => {
+    try {
+      const ctx  = getCtx();
+      const osc  = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = freq;
+      osc.type = type;
+      gain.gain.setValueAtTime(vol, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + dur);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + dur);
+    } catch (_) {}
+  }, [getCtx]);
+
+  /**
+   * 五声音阶旋律 + 简单节拍（受中国传统音乐启发）。
+   * 修改 noteSeq / drumSeq 数组即可更换音乐。
+   */
+  const startMusic = useCallback(() => {
+    const ctx = getCtx();
+    if (ctx.state === "suspended") ctx.resume();
+    const noteSeq  = [523, 659, 784, 698, 523, 440, 587, 659];
+    const drumSeq  = [1, 0, 1, 0, 1, 0, 1, 1];
+    let step = 0;
+    loopRef.current = setInterval(() => {
+      const note = noteSeq[step % noteSeq.length];
+      playTone(note, 0.18, "triangle", 0.09);
+      if (drumSeq[step % drumSeq.length]) playTone(80, 0.08, "square", 0.12);
+      if (step % 4 === 2) playTone(300, 0.05, "square", 0.06);
+      step++;
+    }, 275);
+  }, [getCtx, playTone]);
+
+  const stopMusic = useCallback(() => clearInterval(loopRef.current), []);
+
+  const playScanSound = useCallback(() => {
+    [400, 600, 800, 1000, 1400].forEach((f, i) =>
+      setTimeout(() => playTone(f, 0.15, "sine", 0.12), i * 160)
+    );
+  }, [playTone]);
+
+  const playSuccessSound = useCallback(() => {
+    [523, 659, 784, 1046].forEach((f, i) =>
+      setTimeout(() => playTone(f, 0.25, "triangle", 0.15), i * 100)
+    );
+  }, [playTone]);
+
+  const playClickSound = useCallback(() => playTone(880, 0.05, "square", 0.07), [playTone]);
+
+  return { startMusic, stopMusic, playScanSound, playSuccessSound, playClickSound };
+}
+
+// ──────────────────────────────────────────────
+// 角色 SVG 渲染器
+// ──────────────────────────────────────────────
+function CharacterSVG({ build, customization, animClass = "anim-idle", size = 200 }) {
+  const hp   = PARTS_CATALOG.head.find(p => p.id === build.head)         || PARTS_CATALOG.head[0];
+  const tp   = PARTS_CATALOG.torso.find(p => p.id === build.torso)       || PARTS_CATALOG.torso[0];
+  const lp   = PARTS_CATALOG.leftArm.find(p => p.id === build.leftArm)   || PARTS_CATALOG.leftArm[0];
+  const rp   = PARTS_CATALOG.rightArm.find(p => p.id === build.rightArm) || PARTS_CATALOG.rightArm[0];
+  const legP = PARTS_CATALOG.legs.find(p => p.id === build.legs)         || PARTS_CATALOG.legs[0];
+
+  const tailOption = CUSTOM_CATALOG.tail.find(t => t.id === customization.tail) || CUSTOM_CATALOG.tail[0];
+  const staffOpt   = CUSTOM_CATALOG.staff.find(s => s.id === customization.staff) || CUSTOM_CATALOG.staff[0];
+  const accs       = customization.accessories || [];
+
+  const hasArmor = accs.includes("acc_armor");
+  const hasCrown = accs.includes("acc_crown");
+  const hasSkirt  = accs.includes("acc_skirt");
+
+  return (
+    <svg viewBox="0 0 200 300" width={size} height={size * 1.5} className={animClass}
+      style={{ transformOrigin: "50% 85%", overflow: "visible" }}>
+      <ellipse cx="100" cy="288" rx="44" ry="10" fill="rgba(0,0,0,0.25)" />
+
+      {/* 尾巴 */}
+      {tailOption.id === "t_curl" && (
+        <path d="M125 195 Q170 175 172 148 Q174 120 155 112" stroke={tailOption.color} strokeWidth={9} fill="none" strokeLinecap="round" />
+      )}
+      {tailOption.id === "t_str" && (
+        <line x1="128" y1="195" x2="185" y2="130" stroke={tailOption.color} strokeWidth={9} strokeLinecap="round" />
+      )}
+      {tailOption.id === "t_flame" && (
+        <>
+          <path d="M128 195 Q168 178 170 155 Q172 130 152 115" stroke={tailOption.color} strokeWidth={10} fill="none" strokeLinecap="round" />
+          <circle cx="152" cy="110" r="9" fill={tailOption.color} opacity="0.8" />
+          <circle cx="155" cy="104" r="5" fill="#FFD700" opacity="0.9" />
+        </>
+      )}
+
+      {/* 金箍棒 */}
+      <rect x={154} y={88} width={10} height={132} rx={4} fill={staffOpt.color} />
+      {staffOpt.id === "s_rune" && (
+        <>
+          <circle cx={159} cy={100} r={7} fill={staffOpt.color} stroke="#fff" strokeWidth={1.5} />
+          <circle cx={159} cy={205} r={7} fill={staffOpt.color} stroke="#fff" strokeWidth={1.5} />
+          {[120,140,160,180].map(y => <rect key={y} x={156} y={y} width={6} height={3} rx={1} fill="rgba(255,255,255,0.5)" />)}
+        </>
+      )}
+      {staffOpt.id === "s_glow" && (
+        <>
+          <line x1={159} y1={88} x2={159} y2={220} stroke={staffOpt.color} strokeWidth={14} strokeOpacity={0.2} />
+          <circle cx={159} cy={92}  r={8} fill={staffOpt.color} opacity={0.9} />
+          <circle cx={159} cy={216} r={8} fill={staffOpt.color} opacity={0.9} />
+        </>
+      )}
+
+      {/* ── 腿部 ── */}
+
+      {/* 战姿腿 l1：标准方腿 */}
+      {legP.id === "l1" && <>
+        <rect x={62}  y={188} width={32} height={74} rx={8} fill={legP.color} />
+        <rect x={106} y={188} width={32} height={74} rx={8} fill={legP.color} />
+        <line x1={70}  y1={205} x2={70}  y2={248} stroke={legP.accent} strokeWidth={2} strokeOpacity={0.4} />
+        <line x1={122} y1={205} x2={122} y2={248} stroke={legP.accent} strokeWidth={2} strokeOpacity={0.4} />
+        {/* 靴子 */}
+        <rect x={54}  y={254} width={44} height={20} rx={9} fill="#333" />
+        <rect x={102} y={254} width={44} height={20} rx={9} fill="#333" />
+      </>}
+
+      {/* 矫健腿 l2：细长运动腿 + 膝盖甲 */}
+      {legP.id === "l2" && <>
+        <rect x={64}  y={188} width={28} height={74} rx={6} fill={legP.color} />
+        <rect x={108} y={188} width={28} height={74} rx={6} fill={legP.color} />
+        {/* 膝盖护甲条 */}
+        <rect x={62}  y={218} width={32} height={10} rx={5} fill={legP.accent} opacity={0.6} />
+        <rect x={106} y={218} width={32} height={10} rx={5} fill={legP.accent} opacity={0.6} />
+        {/* 轻型运动靴 */}
+        <rect x={56}  y={254} width={40} height={18} rx={8} fill={legP.color} />
+        <rect x={100} y={254} width={40} height={18} rx={8} fill={legP.color} />
+        <rect x={56}  y={254} width={40} height={8}  rx={8} fill={legP.accent} opacity={0.5} />
+        <rect x={100} y={254} width={40} height={8}  rx={8} fill={legP.accent} opacity={0.5} />
+      </>}
+
+      {/* 龙鳞腿 l3：宽腿 + 鳞片纹路 + 龙爪足 */}
+      {legP.id === "l3" && <>
+        <rect x={58}  y={188} width={38} height={74} rx={8} fill={legP.color} />
+        <rect x={104} y={188} width={38} height={74} rx={8} fill={legP.color} />
+        {/* 鳞片横纹 */}
+        {[198,212,226,240].map(y => <>
+          <rect key={"ll"+y} x={60}  y={y} width={34} height={7} rx={3} fill={legP.accent} opacity={0.3} />
+          <rect key={"rl"+y} x={106} y={y} width={34} height={7} rx={3} fill={legP.accent} opacity={0.3} />
+        </>)}
+        {/* 龙爪足：三趾 */}
+        <ellipse cx={66}  cy={265} rx={7} ry={10} fill={legP.color} transform="rotate(-18,66,265)"  />
+        <ellipse cx={78}  cy={268} rx={7} ry={11} fill={legP.color} />
+        <ellipse cx={90}  cy={265} rx={7} ry={10} fill={legP.color} transform="rotate(18,90,265)"  />
+        <ellipse cx={112} cy={265} rx={7} ry={10} fill={legP.color} transform="rotate(-18,112,265)" />
+        <ellipse cx={124} cy={268} rx={7} ry={11} fill={legP.color} />
+        <ellipse cx={136} cy={265} rx={7} ry={10} fill={legP.color} transform="rotate(18,136,265)"  />
+        {/* 爪尖 */}
+        <path d="M60 258 L57 249" stroke={legP.accent} strokeWidth={2.5} strokeLinecap="round" />
+        <path d="M78 257 L78 248" stroke={legP.accent} strokeWidth={2.5} strokeLinecap="round" />
+        <path d="M96 258 L99 249" stroke={legP.accent} strokeWidth={2.5} strokeLinecap="round" />
+        <path d="M106 258 L103 249" stroke={legP.accent} strokeWidth={2.5} strokeLinecap="round" />
+        <path d="M124 257 L124 248" stroke={legP.accent} strokeWidth={2.5} strokeLinecap="round" />
+        <path d="M142 258 L145 249" stroke={legP.accent} strokeWidth={2.5} strokeLinecap="round" />
+      </>}
+
+      {/* 云靴腿 l4：细腿 + 蓬松云彩靴 */}
+      {legP.id === "l4" && <>
+        <rect x={65}  y={188} width={26} height={66} rx={7} fill={legP.color} />
+        <rect x={109} y={188} width={26} height={66} rx={7} fill={legP.color} />
+        {/* 腿部渐变光泽线 */}
+        <line x1={72}  y1={198} x2={72}  y2={248} stroke="rgba(255,255,255,0.2)" strokeWidth={3} strokeLinecap="round" />
+        <line x1={116} y1={198} x2={116} y2={248} stroke="rgba(255,255,255,0.2)" strokeWidth={3} strokeLinecap="round" />
+        {/* 云靴主体 */}
+        <ellipse cx={78}  cy={264} rx={24} ry={12} fill={legP.accent} />
+        <ellipse cx={122} cy={264} rx={24} ry={12} fill={legP.accent} />
+        {/* 云靴蓬松凸起 */}
+        <circle cx={60}  cy={259} r={10} fill={legP.accent} />
+        <circle cx={74}  cy={256} r={12} fill={legP.accent} />
+        <circle cx={90}  cy={259} r={10} fill={legP.accent} />
+        <circle cx={104} cy={259} r={10} fill={legP.accent} />
+        <circle cx={118} cy={256} r={12} fill={legP.accent} />
+        <circle cx={134} cy={259} r={10} fill={legP.accent} />
+        {/* 云靴内侧亮色 */}
+        <ellipse cx={78}  cy={266} rx={16} ry={7} fill="rgba(255,255,255,0.25)" />
+        <ellipse cx={122} cy={266} rx={16} ry={7} fill="rgba(255,255,255,0.25)" />
+      </>}
+
+      {/* 虎皮裙 */}
+      {hasSkirt && (
+        <rect x={48} y={178} width={104} height={22} rx={6} fill="#F4A030" stroke="#8B4513" strokeWidth={2} opacity={0.95} />
+      )}
+
+      {/* 躯干 */}
+      <rect x={46} y={90} width={108} height={102} rx={10} fill={tp.color} />
+      <rect x={68} y={106} width={64} height={5} rx={2} fill={tp.accent} opacity={0.5} />
+      <rect x={68} y={118} width={64} height={5} rx={2} fill={tp.accent} opacity={0.35} />
+      <rect x={68} y={130} width={64} height={5} rx={2} fill={tp.accent} opacity={0.2} />
+      <rect x={46} y={170} width={108} height={14} rx={4} fill="rgba(0,0,0,0.25)" />
+      <circle cx={100} cy={177} r={7} fill={tp.accent} />
+
+      {/* 护肩甲 */}
+      {hasArmor && (
+        <>
+          <rect x={6}  y={90} width={46} height={22} rx={8} fill="#FFD700" />
+          <rect x={148} y={90} width={46} height={22} rx={8} fill="#FFD700" />
+          <rect x={6}  y={90} width={46} height={22} rx={8} fill="rgba(0,0,0,0)" stroke="#D4A017" strokeWidth={2} />
+          <rect x={148} y={90} width={46} height={22} rx={8} fill="rgba(0,0,0,0)" stroke="#D4A017" strokeWidth={2} />
+        </>
+      )}
+
+      {/* ── 手臂 ── */}
+      {/* 标准臂 la1/ra1：普通圆角矩形 */}
+      {lp.id === "la1" && <>
+        <rect x={10} y={96} width={38} height={76} rx={8} fill={lp.color} />
+        <rect x={14} y={108} width={30} height={4} rx={2} fill={lp.accent} opacity={0.4} />
+        <circle cx={29} cy={178} r={11} fill={lp.color} />
+      </>}
+      {rp.id === "ra1" && <>
+        <rect x={152} y={96} width={38} height={76} rx={8} fill={rp.color} />
+        <rect x={156} y={108} width={30} height={4} rx={2} fill={rp.accent} opacity={0.4} />
+        <circle cx={171} cy={178} r={11} fill={rp.color} />
+      </>}
+
+      {/* 强力臂 la2/ra2：更宽的肌肉形，双横纹 */}
+      {lp.id === "la2" && <>
+        <rect x={6} y={96} width={44} height={80} rx={10} fill={lp.color} />
+        <rect x={10} y={110} width={36} height={5} rx={2} fill={lp.accent} opacity={0.5} />
+        <rect x={10} y={122} width={36} height={5} rx={2} fill={lp.accent} opacity={0.35} />
+        <circle cx={28} cy={180} r={14} fill={lp.color} />
+        <circle cx={28} cy={180} r={8}  fill={lp.accent} opacity={0.3} />
+      </>}
+      {rp.id === "ra2" && <>
+        <rect x={150} y={96} width={44} height={80} rx={10} fill={rp.color} />
+        <rect x={154} y={110} width={36} height={5} rx={2} fill={rp.accent} opacity={0.5} />
+        <rect x={154} y={122} width={36} height={5} rx={2} fill={rp.accent} opacity={0.35} />
+        <circle cx={172} cy={180} r={14} fill={rp.color} />
+        <circle cx={172} cy={180} r={8}  fill={rp.accent} opacity={0.3} />
+      </>}
+
+      {/* 龙爪臂 la3/ra3：鳞片纹路 + 三爪手 */}
+      {lp.id === "la3" && <>
+        <rect x={10} y={96} width={38} height={76} rx={8} fill={lp.color} />
+        {[105,118,131,144].map(y => <rect key={y} x={12} y={y} width={34} height={6} rx={3} fill={lp.accent} opacity={0.35} />)}
+        {/* 爪子 */}
+        <ellipse cx={20} cy={180} rx={5} ry={10} fill={lp.color} transform="rotate(-15,20,180)" />
+        <ellipse cx={29} cy={183} rx={5} ry={11} fill={lp.color} />
+        <ellipse cx={38} cy={180} rx={5} ry={10} fill={lp.color} transform="rotate(15,38,180)" />
+        {/* 爪尖 */}
+        <path d="M16 173 L14 165" stroke={lp.accent} strokeWidth={2.5} strokeLinecap="round" />
+        <path d="M29 172 L29 163" stroke={lp.accent} strokeWidth={2.5} strokeLinecap="round" />
+        <path d="M42 173 L44 165" stroke={lp.accent} strokeWidth={2.5} strokeLinecap="round" />
+      </>}
+      {rp.id === "ra3" && <>
+        <rect x={152} y={96} width={38} height={76} rx={8} fill={rp.color} />
+        {[105,118,131,144].map(y => <rect key={y} x={154} y={y} width={34} height={6} rx={3} fill={rp.accent} opacity={0.35} />)}
+        <ellipse cx={162} cy={180} rx={5} ry={10} fill={rp.color} transform="rotate(-15,162,180)" />
+        <ellipse cx={171} cy={183} rx={5} ry={11} fill={rp.color} />
+        <ellipse cx={180} cy={180} rx={5} ry={10} fill={rp.color} transform="rotate(15,180,180)" />
+        <path d="M158 173 L156 165" stroke={rp.accent} strokeWidth={2.5} strokeLinecap="round" />
+        <path d="M171 172 L171 163" stroke={rp.accent} strokeWidth={2.5} strokeLinecap="round" />
+        <path d="M184 173 L186 165" stroke={rp.accent} strokeWidth={2.5} strokeLinecap="round" />
+      </>}
+
+      {/* 护甲臂 la4/ra4：多层甲片 + 圆形护腕 */}
+      {lp.id === "la4" && <>
+        <rect x={10} y={96} width={38} height={76} rx={8} fill={lp.color} />
+        {/* 甲片 */}
+        <rect x={9}  y={96}  width={40} height={18} rx={6} fill={lp.accent} opacity={0.7} stroke={lp.color} strokeWidth={1} />
+        <rect x={9}  y={116} width={40} height={16} rx={4} fill={lp.accent} opacity={0.55} stroke={lp.color} strokeWidth={1} />
+        <rect x={9}  y={134} width={40} height={16} rx={4} fill={lp.accent} opacity={0.4} stroke={lp.color} strokeWidth={1} />
+        {/* 护腕 */}
+        <rect x={8}  y={152} width={42} height={18} rx={6} fill={lp.accent} opacity={0.8} stroke="rgba(255,255,255,0.3)" strokeWidth={1.5} />
+        <circle cx={29} cy={178} r={11} fill={lp.color} />
+      </>}
+      {rp.id === "ra4" && <>
+        <rect x={152} y={96} width={38} height={76} rx={8} fill={rp.color} />
+        <rect x={151} y={96}  width={40} height={18} rx={6} fill={rp.accent} opacity={0.7} stroke={rp.color} strokeWidth={1} />
+        <rect x={151} y={116} width={40} height={16} rx={4} fill={rp.accent} opacity={0.55} stroke={rp.color} strokeWidth={1} />
+        <rect x={151} y={134} width={40} height={16} rx={4} fill={rp.accent} opacity={0.4} stroke={rp.color} strokeWidth={1} />
+        <rect x={150} y={152} width={42} height={18} rx={6} fill={rp.accent} opacity={0.8} stroke="rgba(255,255,255,0.3)" strokeWidth={1.5} />
+        <circle cx={171} cy={178} r={11} fill={rp.color} />
+      </>}
+
+      {/* ── 头部：真实猴形造型 ── */}
+
+      {/* 耳朵外圈（先绘，位于头部圆形后方） */}
+      <circle cx={56}  cy={43} r={15} fill={hp.color} />
+      <circle cx={144} cy={43} r={15} fill={hp.color} />
+
+      {/* 头部主体圆形（比矩形更像真猴） */}
+      <circle cx={100} cy={49} r={45} fill={hp.color} />
+
+      {/* 耳内浅色（绘于头部前方，仅外缘可见） */}
+      <circle cx={56}  cy={43} r={9} fill={hp.accent} />
+      <circle cx={144} cy={43} r={9} fill={hp.accent} />
+
+      {/* 面部浅色椭圆（猴脸标志性浅色面皮） */}
+      <ellipse cx={100} cy={60} rx={27} ry={24} fill={hp.accent} opacity={0.5} />
+
+      {/* 金冠 / 头带 */}
+      {hasCrown ? (
+        <>
+          <rect x={60} y={13} width={80} height={16} rx={5} fill="#FFD700" />
+          {[66, 80, 94, 108, 122].map(x => (
+            <polygon key={x} points={`${x},14 ${x+7},3 ${x+14},14`} fill="#FFD700" />
+          ))}
+        </>
+      ) : (
+        <rect x={62} y={16} width={76} height={12} rx={5} fill="#FF4444" opacity={0.85} />
+      )}
+
+      {/* 眉骨弓形（猴子最标志性的面部特征） */}
+      <path d="M71 40 Q100 31 129 40" stroke={hp.color} strokeWidth={9} fill="none" strokeLinecap="round" />
+      <path d="M71 40 Q100 31 129 40" stroke="rgba(0,0,0,0.2)" strokeWidth={4} fill="none" strokeLinecap="round" />
+
+      {/* 眼睛（位于眉骨下方） */}
+      <circle cx={83}  cy={50} r={9} fill="white" />
+      <circle cx={117} cy={50} r={9} fill="white" />
+      <circle cx={85}  cy={51} r={6} fill="#1A1A2E" />
+      <circle cx={119} cy={51} r={6} fill="#1A1A2E" />
+      <circle cx={87}  cy={49} r={2} fill="white" />
+      <circle cx={121} cy={49} r={2} fill="white" />
+
+      {/* 猴子嘴吻——小巧紧凑，绝非猪嘴！ */}
+      {/* 小嘴吻区域（比原来窄一半） */}
+      <ellipse cx={100} cy={70} rx={13} ry={10} fill={hp.accent} />
+      {/* 扁平猴鼻：鼻梁 + 朝下椭圆鼻孔（而非朝上的猪鼻） */}
+      <path d="M94 64 Q100 62 106 64" stroke={hp.color} strokeWidth={2} fill="none" strokeLinecap="round" opacity={0.55} />
+      <ellipse cx={94}  cy={68} rx={3.5} ry={2.5} fill={hp.color} opacity={0.6} transform="rotate(-8, 94, 68)" />
+      <ellipse cx={106} cy={68} rx={3.5} ry={2.5} fill={hp.color} opacity={0.6} transform="rotate(8, 106, 68)" />
+      {/* 嘴巴微笑弧线 */}
+      <path d="M90 76 Q100 83 110 76" stroke="#7A4010" strokeWidth={2.5} fill="none" strokeLinecap="round" />
+
+      {/* 智者眉毛 */}
+      {hp.id === "h3" && (
+        <>
+          <path d="M71 38 Q82 31 92 38" stroke="#8B4513" strokeWidth={2.5} fill="none" strokeLinecap="round" />
+          <path d="M108 38 Q118 31 129 38" stroke="#8B4513" strokeWidth={2.5} fill="none" strokeLinecap="round" />
+        </>
+      )}
+
+      {/* 战士纹路 */}
+      {hp.id === "h2" && (
+        <>
+          <line x1={83} y1={38} x2={83} y2={50} stroke="#E63329" strokeWidth={2} />
+          <line x1={117} y1={38} x2={117} y2={50} stroke="#E63329" strokeWidth={2} />
+        </>
+      )}
+
+      {/* 灵魂光晕 */}
+      {hp.id === "h4" && (
+        [[-22,-8],[22,-8],[0,-21],[-14,7],[14,7]].map(([dx,dy], i) => (
+          <text key={i} x={100+dx} y={49+dy} fontSize={8} textAnchor="middle" dominantBaseline="middle" opacity={0.8}>✦</text>
+        ))
+      )}
+    </svg>
+  );
+}
+
+// ──────────────────────────────────────────────
+// 星空背景组件
+// ──────────────────────────────────────────────
+function StarsBg() {
+  const stars = Array.from({ length: 55 }, (_, i) => ({
+    id: i,
+    x: Math.random() * 100,
+    y: Math.random() * 100,
+    size: Math.random() * 2 + 0.5,
+    delay: Math.random() * 4,
+    dur: 2 + Math.random() * 3,
+  }));
+
+  return (
+    <div className="stars-bg">
+      {stars.map(s => (
+        <div key={s.id} className="star" style={{
+          left: `${s.x}%`, top: `${s.y}%`,
+          width: s.size, height: s.size,
+          "--delay": `${s.delay}s`, "--d": `${s.dur}s`,
+          animationDelay: `${s.delay}s`, animationDuration: `${s.dur}s`,
+        }} />
+      ))}
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────
+// 主游戏组件
+// ──────────────────────────────────────────────
+function MonkeyKingGame() {
+  // ── 核心状态 ──
+  const [mode, setMode] = useState("build");
+  const [build, setBuild] = useState({ head: "h1", torso: "t1", leftArm: "la1", rightArm: "ra1", legs: "l1" });
+  const [customization, setCustomization] = useState({ tail: "t_curl", staff: "s_gold", accessories: [] });
+  const [selectedZone, setSelectedZone] = useState("head");
+  const [creationName, setCreationName] = useState("我的悟空");
+
+  // ── 扫描状态 ──
+  const [scanProgress, setScanProgress] = useState(0);
+  const [isScanning,   setIsScanning]   = useState(false);
+  const [scanDone,     setScanDone]     = useState(false);
+  const [scanLog,      setScanLog]      = useState([]);
+
+  // ── 展示状态 ──
+  const [currentMove,    setCurrentMove]    = useState(null);
+  const [isAutoPerform,  setIsAutoPerform]  = useState(false);
+  const [isMusicPlaying, setIsMusicPlaying] = useState(false);
+  const autoRef = useRef(null);
+
+  // ── 存档 ──
+  const [savedCreations, setSavedCreations] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("brickKing_saves_cn") || "[]"); } catch { return []; }
+  });
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [showLoadModal, setShowLoadModal] = useState(false);
+  const [hint, setHint] = useState("👇 点击身体区域开始建造！");
+
+  const audio = useGameAudio();
+
+  // ── 导航 ──
+  const goToMode = useCallback((m) => {
+    if (m === "scan" && mode === "build") { setScanDone(false); setScanProgress(0); setScanLog([]); }
+    if (m === "showcase") setCurrentMove("anim-idle");
+    audio.playClickSound();
+    setMode(m);
+  }, [mode, audio]);
+
+  // ── 建造操作 ──
+  const selectPart = (zone, partId) => {
+    setBuild(b => ({ ...b, [zone]: partId }));
+    audio.playClickSound();
+    setHint("✅ 零件已装备！继续选择其他部位吧。");
+  };
+
+  const selectZone = (zone) => {
+    setSelectedZone(zone);
+    audio.playClickSound();
+    const tips = {
+      head:     "👆 选择美猴王的头部样式！",
+      torso:    "🎽 挑选躯干——战袍、龙甲还是云衣？",
+      leftArm:  "💪 选择左臂的力量等级。",
+      rightArm: "💪 右臂——对称还是混搭？",
+      legs:     "🦵 设置腿部站姿，展现风采！",
+    };
+    setHint(tips[zone] || "点击身体区域！");
+  };
+
+  // ── 扫描序列 ──
+  const startScan = () => {
+    if (isScanning) return;
+    setIsScanning(true); setScanProgress(0); setScanLog([]);
+    audio.playScanSound();
+
+    const logs = [
+      "正在检测零件几何形状…",
+      "正在映射关节位置…",
+      "正在解析纹理图集…",
+      "正在生成角色网格…",
+      "正在应用物理骨骼…",
+      "✅ 扫描完成！",
+    ];
+
+    let step = 0;
+    const iv = setInterval(() => {
+      setScanProgress(p => {
+        const next = Math.min(p + Math.random() * 18 + 4, 100);
+        if (next >= 100) {
+          clearInterval(iv);
+          setIsScanning(false);
+          setScanDone(true);
+          audio.playSuccessSound();
+          setScanLog(l => [...l, logs[5]]);
+        }
+        return next;
+      });
+      if (step < logs.length - 1) { setScanLog(l => [...l, logs[step]]); step++; }
+    }, 320);
+  };
+
+  // ── 定制操作 ──
+  const toggleAccessory = (id) => {
+    setCustomization(c => {
+      const has = c.accessories.includes(id);
+      return { ...c, accessories: has ? c.accessories.filter(a => a !== id) : [...c.accessories, id] };
+    });
+    audio.playClickSound();
+  };
+
+  // ── 展示操作 ──
+  const triggerMove = (m) => {
+    setCurrentMove(m.animClass);
+    audio.playClickSound();
+    setHint(`🥋 正在表演：${m.name}！`);
+  };
+
+  const toggleAutoPerform = () => {
+    setIsAutoPerform(a => {
+      if (!a) {
+        let idx = 0;
+        autoRef.current = setInterval(() => { setCurrentMove(MOVES[idx % MOVES.length].animClass); idx++; }, 1500);
+      } else {
+        clearInterval(autoRef.current);
+        setCurrentMove("anim-idle");
+      }
+      return !a;
+    });
+  };
+
+  const toggleMusic = () => {
+    setIsMusicPlaying(p => { if (!p) audio.startMusic(); else audio.stopMusic(); return !p; });
+  };
+
+  useEffect(() => () => { clearInterval(autoRef.current); audio.stopMusic(); }, []);
+
+  // ── 存档操作 ──
+  const saveCreation = () => {
+    if (savedCreations.length >= 5) { setHint("⚠️ 已达上限5个存档！请先删除一个。"); return; }
+    const creation = { id: Date.now(), name: creationName, build, customization, savedAt: new Date().toLocaleDateString("zh-CN") };
+    const updated = [...savedCreations, creation];
+    setSavedCreations(updated);
+    try { localStorage.setItem("brickKing_saves_cn", JSON.stringify(updated)); } catch (_) {}
+    setShowSaveModal(false);
+    audio.playSuccessSound();
+    setHint(`💾 「${creationName}」已保存！`);
+  };
+
+  const loadCreation = (c) => {
+    setBuild(c.build); setCustomization(c.customization); setCreationName(c.name);
+    setShowLoadModal(false); setMode("build");
+    setHint(`📂 已加载「${c.name}」！尽情改造吧。`);
+  };
+
+  const deleteCreation = (id) => {
+    const updated = savedCreations.filter(c => c.id !== id);
+    setSavedCreations(updated);
+    try { localStorage.setItem("brickKing_saves_cn", JSON.stringify(updated)); } catch (_) {}
+  };
+
+  const currentMoveObj = MOVES.find(m => m.animClass === currentMove);
+
+  // ─────────────────────────────────────────────
+  // 渲染
+  // ─────────────────────────────────────────────
+  return (
+    <>
+      <style>{STYLE_SHEET}</style>
+      <StarsBg />
+
+      <div className="game-root" style={{ position: "relative", zIndex: 1 }}>
+
+        {/* ── 页眉 ── */}
+        <div style={{ width: "100%", maxWidth: 860, display: "flex", flexDirection: "column", alignItems: "center", gap: 10, padding: "18px 0 10px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <span style={{ fontSize: "2rem" }}>🐒</span>
+            <h1 className="game-title">砖块大王</h1>
+            <span style={{ fontSize: "2rem" }}>👑</span>
+          </div>
+          <p style={{ margin: 0, color: "rgba(255,255,255,0.4)", fontSize: "0.78rem", fontWeight: 700, letterSpacing: "0.08em" }}>
+            建造 · 扫描 · 定制 · 展示
+          </p>
+
+          {/* 导航栏 */}
+          <div className="nav-bar">
+            {[
+              { id: "build",     label: "建造",   emoji: "🧱" },
+              { id: "scan",      label: "扫描",   emoji: "🔬" },
+              { id: "customize", label: "定制",   emoji: "🎨" },
+              { id: "showcase",  label: "展示",   emoji: "🎭" },
+            ].map(n => (
+              <button key={n.id} className={`nav-btn ${mode === n.id ? "active" : ""}`} onClick={() => goToMode(n.id)}>
+                <span>{n.emoji}</span>
+                <span>{n.label}</span>
+                {n.id === "build" && Object.values(build).filter(Boolean).length < 5 && <span className="badge">!</span>}
+              </button>
+            ))}
+          </div>
+
+          {/* 提示栏 */}
+          <div className="hint-bar" style={{ maxWidth: 600, width: "100%" }}>
+            <span>💡</span>
+            <span>{hint}</span>
+          </div>
+        </div>
+
+        {/* ══════════════════════════════════════════
+            建造模式
+        ══════════════════════════════════════════ */}
+        {mode === "build" && (
+          <div style={{ width: "100%", maxWidth: 860, display: "flex", flexDirection: "column", gap: 12 }}>
+            <div className="build-layout">
+
+              {/* 左栏：身体区域选择 */}
+              <div className="panel" style={{ padding: 16, display: "flex", flexDirection: "column", gap: 10 }}>
+                <div className="section-label">身体区域</div>
+                <div className="zone-grid">
+                  {ZONE_CONFIG.map(z => (
+                    <button key={z.id}
+                      className={`zone-btn${build[z.id] ? " filled" : ""}${selectedZone === z.id ? " selected" : ""}`}
+                      style={{ gridArea: z.area }}
+                      onClick={() => selectZone(z.id)}
+                    >
+                      <span style={{ fontSize: "1.3rem" }}>
+                        {build[z.id] ? (PARTS_CATALOG[z.id]?.find(p => p.id === build[z.id])?.emoji || z.emoji) : z.emoji}
+                      </span>
+                      <span>
+                        {build[z.id]
+                          ? PARTS_CATALOG[z.id]?.find(p => p.id === build[z.id])?.name?.split(/\s|（/)[0]
+                          : z.label}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                <div style={{ textAlign: "center", marginTop: 4 }}>
+                  <div style={{ color: "rgba(255,215,0,0.6)", fontSize: "0.72rem", fontWeight: 800 }}>
+                    正在编辑：{ZONE_CONFIG.find(z => z.id === selectedZone)?.label}
+                  </div>
+                </div>
+              </div>
+
+              {/* 中栏：角色预览 */}
+              <div className="char-display">
+                <div className="char-frame panel" style={{ padding: 20 }}>
+                  <CharacterSVG build={build} customization={customization} animClass="anim-idle" size={180} />
+                </div>
+                <div className="char-name-badge">{creationName}</div>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <button className="brick-btn gold sm" onClick={() => setShowSaveModal(true)}>💾 保存</button>
+                  <button className="brick-btn dark sm" onClick={() => setShowLoadModal(true)}>📂 加载（{savedCreations.length}/5）</button>
+                </div>
+              </div>
+
+              {/* 右栏：零件选择板 */}
+              <div className="panel" style={{ padding: 16, display: "flex", flexDirection: "column", gap: 10 }}>
+                <div className="section-label">
+                  {ZONE_CONFIG.find(z => z.id === selectedZone)?.label} 零件
+                </div>
+                <div className="parts-palette">
+                  {(PARTS_CATALOG[selectedZone] || []).map(part => (
+                    <div key={part.id}
+                      className={`part-tile${build[selectedZone] === part.id ? " selected" : ""}`}
+                      style={{ borderColor: build[selectedZone] === part.id ? part.color : undefined }}
+                      onClick={() => selectPart(selectedZone, part.id)}
+                    >
+                      <div className="part-icon">{part.emoji}</div>
+                      <div className="part-name">{part.name}</div>
+                      <div className="part-label">{part.label}</div>
+                      {build[selectedZone] === part.id && (
+                        <div style={{ marginTop: 4, fontSize: "0.65rem", color: "#FFD700", fontWeight: 900 }}>✓ 已装备</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "center", marginTop: 4 }}>
+              <button className="brick-btn gold lg" onClick={() => goToMode("scan")}>
+                🔬 扫描我的作品 →
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════
+            扫描模式
+        ══════════════════════════════════════════ */}
+        {mode === "scan" && (
+          <div style={{ width: "100%", maxWidth: 600, display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
+            <div className="scan-screen panel" style={{ width: "100%", padding: 28, background: "rgba(0,10,20,0.7)" }}>
+
+              <div style={{ textAlign: "center", marginBottom: 16 }}>
+                <div style={{ fontFamily: "'Noto Sans SC', cursive", fontWeight: 900, fontSize: "1.3rem", color: "var(--sky)", letterSpacing: "0.06em" }}>
+                  {isScanning ? "⚡ 扫描进行中…" : scanDone ? "✅ 扫描完成！" : "🔬 准备开始扫描"}
+                </div>
+                <div style={{ color: "rgba(255,255,255,0.35)", fontSize: "0.73rem", fontWeight: 700, marginTop: 4 }}>
+                  {isScanning ? "保持不动——正在分析结构…" : scanDone ? "您的美猴王已就绪！" : "点击扫描将您的作品数字化"}
+                </div>
+              </div>
+
+              <div style={{ position: "relative", display: "flex", justifyContent: "center", marginBottom: 16 }}>
+                <CharacterSVG build={build} customization={customization} animClass={isScanning ? "" : "anim-idle"} size={180} />
+                {isScanning && (
+                  <>
+                    <div className="scan-overlay" style={{ position: "absolute", inset: 0, borderRadius: 12 }} />
+                    <div className="scan-line" />
+                  </>
+                )}
+                {scanDone && (
+                  <div style={{ position: "absolute", inset: 0, borderRadius: 12, background: "radial-gradient(ellipse at center, rgba(0,255,200,0.12) 0%, transparent 70%)", animation: "scanPulse 2s ease-in-out infinite", pointerEvents: "none" }} />
+                )}
+              </div>
+
+              <div className="progress-bar-track" style={{ marginBottom: 10 }}>
+                <div className="progress-bar-fill" style={{ width: `${scanProgress}%` }} />
+              </div>
+              <div style={{ textAlign: "right", fontSize: "0.72rem", color: "var(--sky)", fontWeight: 800, marginBottom: 14 }}>
+                {Math.round(scanProgress)}%
+              </div>
+
+              <div style={{ background: "rgba(0,0,0,0.4)", borderRadius: 10, padding: "10px 14px", fontFamily: "monospace", fontSize: "0.72rem", color: "var(--jade)", minHeight: 80, maxHeight: 120, overflowY: "auto", marginBottom: 16 }}>
+                {scanLog.length === 0 && <span style={{ color: "rgba(255,255,255,0.2)" }}>{">"} 等待扫描指令…</span>}
+                {scanLog.map((l, i) => (
+                  <div key={i} style={{ color: l.startsWith("✅") ? "#FFD700" : "#3CB371" }}>{"> "}{l}</div>
+                ))}
+              </div>
+
+              <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+                {!scanDone ? (
+                  <button className="brick-btn sky lg" onClick={startScan} disabled={isScanning} style={{ opacity: isScanning ? 0.6 : 1 }}>
+                    {isScanning ? "⏳ 扫描中…" : "🔬 开始扫描"}
+                  </button>
+                ) : (
+                  <>
+                    <button className="brick-btn gold lg" onClick={() => goToMode("customize")}>🎨 定制外观 →</button>
+                    <button className="brick-btn dark md" onClick={() => { setScanDone(false); setScanProgress(0); setScanLog([]); }}>🔄 重新扫描</button>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════
+            定制模式
+        ══════════════════════════════════════════ */}
+        {mode === "customize" && (
+          <div style={{ width: "100%", maxWidth: 820, display: "grid", gridTemplateColumns: "1fr 220px", gap: 14 }}>
+
+            {/* 左栏：选项 */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+
+              {/* 尾巴 */}
+              <div className="panel" style={{ padding: 16 }}>
+                <div className="section-label">🌀 尾巴样式</div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {CUSTOM_CATALOG.tail.map(t => (
+                    <div key={t.id}
+                      className={`custom-option${customization.tail === t.id ? " active" : ""}`}
+                      style={{ flex: "1 1 80px", minWidth: 80 }}
+                      onClick={() => { setCustomization(c => ({ ...c, tail: t.id })); audio.playClickSound(); }}
+                    >
+                      <div style={{ fontSize: "1.8rem" }}>{t.emoji}</div>
+                      <div style={{ fontSize: "0.72rem", fontWeight: 800, marginTop: 4 }}>{t.name}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* 金箍棒 */}
+              <div className="panel" style={{ padding: 16 }}>
+                <div className="section-label">⚔️ 武器款式</div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {CUSTOM_CATALOG.staff.map(s => (
+                    <div key={s.id}
+                      className={`custom-option${customization.staff === s.id ? " active" : ""}`}
+                      style={{ flex: "1 1 80px", minWidth: 80 }}
+                      onClick={() => { setCustomization(c => ({ ...c, staff: s.id })); audio.playClickSound(); }}
+                    >
+                      <div style={{ fontSize: "1.8rem" }}>{s.emoji}</div>
+                      <div style={{ fontSize: "0.72rem", fontWeight: 800, marginTop: 4 }}>{s.name}</div>
+                      <div style={{ width: 24, height: 4, borderRadius: 2, background: s.color, margin: "5px auto 0" }} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* 配件 */}
+              <div className="panel" style={{ padding: 16 }}>
+                <div className="section-label">✨ 配件（可多选）</div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {CUSTOM_CATALOG.accessories.map(a => (
+                    <div key={a.id}
+                      className={`custom-option${customization.accessories.includes(a.id) ? " active" : ""}`}
+                      style={{ flex: "1 1 80px", minWidth: 80 }}
+                      onClick={() => toggleAccessory(a.id)}
+                    >
+                      <div style={{ fontSize: "1.8rem" }}>{a.emoji}</div>
+                      <div style={{ fontSize: "0.72rem", fontWeight: 800, marginTop: 4 }}>{a.name}</div>
+                      {customization.accessories.includes(a.id) && (
+                        <div style={{ fontSize: "0.65rem", color: "#FFD700", fontWeight: 900, marginTop: 3 }}>✓ 已开启</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* 作品名称 */}
+              <div className="panel" style={{ padding: 16 }}>
+                <div className="section-label">📛 作品名称</div>
+                <input
+                  className="game-input"
+                  value={creationName}
+                  onChange={e => setCreationName(e.target.value)}
+                  placeholder="给您的美猴王取个名字…"
+                  maxLength={24}
+                />
+              </div>
+
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                <button className="brick-btn dark md" onClick={() => goToMode("build")}>← 返回建造</button>
+                <button className="brick-btn gold lg" onClick={() => goToMode("showcase")}>🎭 去展示 →</button>
+              </div>
+            </div>
+
+            {/* 右栏：实时预览 */}
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
+              <div className="section-label" style={{ textAlign: "center" }}>实时预览</div>
+              <div className="char-frame panel" style={{ padding: 16, width: "100%" }}>
+                <CharacterSVG build={build} customization={customization} animClass="anim-idle" size={170} />
+              </div>
+              <div className="char-name-badge" style={{ textAlign: "center" }}>{creationName}</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 4, justifyContent: "center" }}>
+                {customization.accessories.map(id => {
+                  const a = CUSTOM_CATALOG.accessories.find(x => x.id === id);
+                  return a ? <span key={id} className="tag">{a.emoji} {a.name}</span> : null;
+                })}
+              </div>
+              <button className="brick-btn jade sm" onClick={() => setShowSaveModal(true)}>💾 保存</button>
+            </div>
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════
+            展示模式
+        ══════════════════════════════════════════ */}
+        {mode === "showcase" && (
+          <div style={{ width: "100%", maxWidth: 820, display: "flex", flexDirection: "column", gap: 12 }}>
+
+            {/* 舞台 */}
+            <div className="stage-bg" style={{ padding: 20, minHeight: 340, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
+              <div className="stage-spotlight" />
+              <div className="stage-floor" />
+              <div style={{ position: "relative", zIndex: 2, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+                <CharacterSVG build={build} customization={customization} animClass={currentMove || "anim-idle"} size={220} />
+                <div className="char-name-badge" style={{ textAlign: "center" }}>{creationName}</div>
+                {currentMoveObj && (
+                  <div style={{ background: "rgba(255,215,0,0.12)", border: "1.5px solid rgba(255,215,0,0.3)", borderRadius: 20, padding: "4px 14px", fontSize: "0.75rem", color: "#FFD700", fontWeight: 800, letterSpacing: "0.05em" }}>
+                    {currentMoveObj.emoji} {currentMoveObj.name}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 控制栏 */}
+            <div className="panel" style={{ padding: 14, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <button className={`brick-btn ${isMusicPlaying ? "red" : "dark"} md`} onClick={toggleMusic} style={{ minWidth: 110 }}>
+                {isMusicPlaying ? (
+                  <>
+                    <span>🔇</span>
+                    <div className="music-wave">
+                      {[1,2,3,4,5].map(i => (
+                        <div key={i} className="music-bar" style={{ "--d": `${0.3 + i * 0.08}s`, animationDelay: `${i * 0.06}s` }} />
+                      ))}
+                    </div>
+                  </>
+                ) : "🎵 音乐"}
+              </button>
+              <button className={`brick-btn ${isAutoPerform ? "jade" : "dark"} md`} onClick={toggleAutoPerform}>
+                {isAutoPerform ? "⏹ 停止自动" : "▶ 自动表演"}
+              </button>
+              <button className="brick-btn dark sm" onClick={() => { setCurrentMove("anim-idle"); setIsAutoPerform(false); clearInterval(autoRef.current); }}>
+                😌 待机
+              </button>
+            </div>
+
+            {/* 动作按钮 */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8 }}>
+              {MOVES.map(m => (
+                <button key={m.id}
+                  className={`move-btn${currentMove === m.animClass && !isAutoPerform ? " active" : ""}`}
+                  onClick={() => { triggerMove(m); setIsAutoPerform(false); clearInterval(autoRef.current); }}
+                >
+                  <span style={{ fontSize: "1.5rem" }}>{m.emoji}</span>
+                  <span style={{ fontSize: "0.7rem" }}>{m.name}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* 底部导航 */}
+            <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 4 }}>
+              <button className="brick-btn dark md" onClick={() => goToMode("customize")}>← 返回定制</button>
+              <button className="brick-btn gold md" onClick={() => setShowSaveModal(true)}>💾 保存作品</button>
+              <button className="brick-btn red md" onClick={() => {
+                setBuild({ head: "h1", torso: "t1", leftArm: "la1", rightArm: "ra1", legs: "l1" });
+                setCustomization({ tail: "t_curl", staff: "s_gold", accessories: [] });
+                goToMode("build");
+              }}>
+                🔄 新建作品
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ══════════════════════════════════════════
+          保存弹窗
+      ══════════════════════════════════════════ */}
+      {showSaveModal && (
+        <div className="modal-overlay" onClick={() => setShowSaveModal(false)}>
+          <div className="modal-box" onClick={e => e.stopPropagation()}>
+            <div style={{ fontFamily: "'Noto Sans SC', sans-serif", fontWeight: 900, fontSize: "1.3rem", color: "#FFD700", marginBottom: 14 }}>
+              💾 保存作品
+            </div>
+            <div style={{ marginBottom: 10 }}>
+              <div className="section-label">作品名称</div>
+              <input className="game-input" value={creationName} onChange={e => setCreationName(e.target.value)} placeholder="给您的美猴王取个名字…" maxLength={24} />
+            </div>
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 14 }}>
+              <CharacterSVG build={build} customization={customization} animClass="anim-idle" size={100} />
+            </div>
+            <div style={{ color: "rgba(255,255,255,0.4)", fontSize: "0.72rem", marginBottom: 14 }}>
+              已使用槽位：{savedCreations.length}/5
+            </div>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button className="brick-btn dark md" onClick={() => setShowSaveModal(false)}>取消</button>
+              <button className="brick-btn gold md" onClick={saveCreation} disabled={savedCreations.length >= 5}>保存</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════
+          加载弹窗
+      ══════════════════════════════════════════ */}
+      {showLoadModal && (
+        <div className="modal-overlay" onClick={() => setShowLoadModal(false)}>
+          <div className="modal-box" onClick={e => e.stopPropagation()}>
+            <div style={{ fontFamily: "'Noto Sans SC', sans-serif", fontWeight: 900, fontSize: "1.3rem", color: "#FFD700", marginBottom: 14 }}>
+              📂 已保存的作品
+            </div>
+            {savedCreations.length === 0 && (
+              <div style={{ color: "rgba(255,255,255,0.35)", textAlign: "center", padding: "20px 0" }}>还没有保存的作品——快去建造吧！</div>
+            )}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 14 }}>
+              {savedCreations.map(c => (
+                <div key={c.id} style={{ position: "relative" }}>
+                  <div className="save-card" onClick={() => loadCreation(c)}>
+                    <CharacterSVG build={c.build} customization={c.customization} animClass="" size={60} />
+                    <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "white", marginTop: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</div>
+                    <div style={{ fontSize: "0.6rem", color: "rgba(255,255,255,0.35)" }}>{c.savedAt}</div>
+                  </div>
+                  <button
+                    onClick={() => deleteCreation(c.id)}
+                    style={{ position: "absolute", top: -4, right: -4, background: "#E8372A", border: "none", borderRadius: "50%", width: 18, height: 18, fontSize: 10, color: "white", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                  >✕</button>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <button className="brick-btn dark md" onClick={() => setShowLoadModal(false)}>关闭</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+
+    // ── Mount the app ──
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<MonkeyKingGame />);
+  </script>
+</body>
+</html>
