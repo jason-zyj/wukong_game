@@ -1,0 +1,2073 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>砖块大王 — 孙悟空传奇</title>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>*{box-sizing:border-box;margin:0;padding:0;}body{background:#0D0820;}</style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useCallback } = React;
+
+// ══════════════════════════════════════════════════════════
+// 样式
+// ══════════════════════════════════════════════════════════
+const STYLE_SHEET = `
+  @import url('https://fonts.googleapis.com/css2?family=Fredoka+One&family=Noto+Sans+SC:wght@400;700;900&display=swap');
+  :root {
+    --gold:#FFD700; --gold-dark:#D4A017; --red:#E8372A; --red-dark:#B02A20;
+    --orange:#FF6B35; --ink:#1A0A00; --sky:#7EC8E3; --jade:#3CB371;
+    --cream:#FFF8E7;
+    --bs:0 4px 0 rgba(0,0,0,0.35),0 6px 12px rgba(0,0,0,0.2);
+    --bs-sm:0 2px 0 rgba(0,0,0,0.35);
+  }
+  *{box-sizing:border-box;}
+  body,#root{margin:0;padding:0;font-family:'Noto Sans SC',sans-serif;}
+  .game-root{min-height:100vh;background:linear-gradient(160deg,#0D0820 0%,#1A1040 40%,#0D1830 100%);
+    display:flex;flex-direction:column;align-items:center;padding:0 8px 40px;overflow-x:hidden;}
+  .game-title{font-family:'Fredoka One','Noto Sans SC',cursive;font-size:clamp(1.6rem,5vw,2.8rem);
+    color:var(--gold);text-shadow:3px 3px 0 var(--red-dark),0 0 30px rgba(255,215,0,0.4);
+    letter-spacing:.04em;margin:0;line-height:1;}
+  .panel{background:rgba(255,255,255,0.05);border:1.5px solid rgba(255,215,0,0.15);
+    border-radius:18px;backdrop-filter:blur(6px);}
+  .brick-btn{font-family:'Noto Sans SC',sans-serif;font-weight:900;border:none;border-radius:10px;
+    cursor:pointer;transition:all .12s;box-shadow:var(--bs);position:relative;top:0;
+    letter-spacing:.03em;display:inline-flex;align-items:center;justify-content:center;gap:6px;}
+  .brick-btn:hover{transform:translateY(-2px);filter:brightness(1.08);}
+  .brick-btn:active{top:3px;box-shadow:var(--bs-sm);transform:translateY(0);}
+  .brick-btn:disabled{opacity:.45;cursor:not-allowed;transform:none;}
+  .brick-btn.gold{background:linear-gradient(180deg,#FFE566 0%,var(--gold) 50%,#C8A800 100%);color:var(--ink);}
+  .brick-btn.red{background:linear-gradient(180deg,#FF5545 0%,var(--red) 50%,var(--red-dark) 100%);color:white;}
+  .brick-btn.jade{background:linear-gradient(180deg,#50D890 0%,var(--jade) 50%,#2A7A50 100%);color:white;}
+  .brick-btn.sky{background:linear-gradient(180deg,#A0DCEF 0%,var(--sky) 50%,#5AA8C0 100%);color:var(--ink);}
+  .brick-btn.dark{background:linear-gradient(180deg,#3A3060 0%,#1A1040 100%);color:white;
+    border:2px solid rgba(255,215,0,0.3);}
+  .brick-btn.purple{background:linear-gradient(180deg,#c084fc 0%,#9333ea 50%,#6b21a8 100%);color:white;}
+  .brick-btn.lg{font-size:1.05rem;padding:12px 24px;border-radius:12px;}
+  .brick-btn.md{font-size:.9rem;padding:9px 18px;border-radius:10px;}
+  .brick-btn.sm{font-size:.78rem;padding:6px 12px;border-radius:8px;}
+  .brick-btn.xs{font-size:.7rem;padding:4px 10px;border-radius:7px;}
+  .section-label{font-family:'Noto Sans SC',sans-serif;font-weight:900;
+    color:rgba(255,215,0,.7);font-size:.75rem;letter-spacing:.08em;
+    text-transform:uppercase;margin-bottom:6px;}
+  input.game-input{background:rgba(255,255,255,.06);border:1.5px solid rgba(255,215,0,.3);
+    border-radius:10px;color:white;font-family:'Noto Sans SC',sans-serif;font-weight:700;
+    padding:8px 14px;font-size:.9rem;outline:none;width:100%;}
+  input.game-input:focus{border-color:var(--gold);box-shadow:0 0 10px rgba(255,215,0,.2);}
+  input.game-input::placeholder{color:rgba(255,255,255,.25);}
+  .char-name-badge{font-family:'Noto Sans SC',sans-serif;font-weight:900;font-size:1.1rem;
+    color:var(--gold);text-shadow:0 0 12px rgba(255,215,0,.5);letter-spacing:.05em;}
+  .stars-bg{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:0;}
+  .star{position:absolute;border-radius:50%;background:white;
+    animation:twinkle var(--d,3s) ease-in-out infinite;animation-delay:var(--delay,0s);}
+  @keyframes twinkle{0%,100%{opacity:.15;transform:scale(1);}50%{opacity:.9;transform:scale(1.3);}}
+
+  /* ── Builder styles ── */
+  .nav-bar{display:flex;gap:6px;background:rgba(0,0,0,.4);border-radius:16px;
+    padding:6px;border:2px solid rgba(255,215,0,.2);}
+  .nav-btn{font-family:'Noto Sans SC',sans-serif;font-weight:900;font-size:.85rem;border:none;
+    border-radius:10px;padding:8px 14px;cursor:pointer;transition:all .15s;
+    position:relative;letter-spacing:.02em;display:flex;align-items:center;gap:5px;}
+  .nav-btn.active{background:var(--gold);color:var(--ink);box-shadow:var(--bs);transform:translateY(-1px);}
+  .nav-btn:not(.active){background:rgba(255,255,255,.07);color:rgba(255,255,255,.5);}
+  .nav-btn:not(.active):hover{background:rgba(255,255,255,.14);color:rgba(255,255,255,.8);}
+  .nav-btn .badge{background:var(--red);color:white;border-radius:6px;font-size:.65rem;padding:1px 5px;}
+  .build-layout{display:grid;grid-template-columns:220px 1fr 220px;gap:12px;width:100%;max-width:860px;}
+  .zone-grid{display:grid;grid-template-areas:". head ." "larm torso rarm" ". legs ." ". mount .";
+    gap:6px;align-self:start;}
+  .zone-btn{font-family:'Noto Sans SC',sans-serif;font-weight:900;font-size:.78rem;
+    border:2.5px dashed rgba(255,215,0,.3);border-radius:12px;padding:10px 6px;cursor:pointer;
+    background:rgba(255,255,255,.04);color:rgba(255,255,255,.55);transition:all .15s;
+    display:flex;flex-direction:column;align-items:center;gap:3px;min-width:70px;line-height:1.1;}
+  .zone-btn.filled{border-style:solid;border-color:var(--gold);
+    background:rgba(255,215,0,.08);color:var(--gold);}
+  .zone-btn.selected{border-color:var(--orange);background:rgba(255,107,53,.15);
+    color:var(--orange);box-shadow:0 0 12px rgba(255,107,53,.4);}
+  .zone-btn:hover{border-color:var(--gold);color:var(--gold);background:rgba(255,215,0,.06);}
+  .parts-palette{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .part-tile{border-radius:12px;padding:12px 8px;cursor:pointer;border:2.5px solid transparent;
+    transition:all .15s;text-align:center;background:rgba(255,255,255,.05);}
+  .part-tile:hover{transform:translateY(-2px);border-color:rgba(255,215,0,.5);}
+  .part-tile.selected{border-color:var(--gold);background:rgba(255,215,0,.12);
+    box-shadow:0 0 12px rgba(255,215,0,.3);}
+  .char-frame{background:radial-gradient(ellipse at 50% 60%,rgba(255,215,0,.08) 0%,transparent 70%);
+    border-radius:20px;border:1.5px solid rgba(255,215,0,.12);padding:12px;
+    position:relative;overflow:hidden;}
+  .custom-option{border-radius:12px;padding:10px;cursor:pointer;border:2.5px solid transparent;
+    background:rgba(255,255,255,.05);transition:all .15s;text-align:center;color:white;}
+  .custom-option:hover{border-color:rgba(255,215,0,.5);transform:translateY(-1px);}
+  .custom-option.active{border-color:var(--gold);background:rgba(255,215,0,.12);
+    box-shadow:0 0 12px rgba(255,215,0,.25);}
+  .hint-bar{background:rgba(255,215,0,.08);border:1.5px solid rgba(255,215,0,.2);
+    border-radius:10px;padding:7px 14px;font-size:.78rem;color:rgba(255,215,0,.8);
+    font-weight:700;display:flex;align-items:center;gap:6px;}
+  .save-card{background:rgba(255,255,255,.05);border:1.5px solid rgba(255,215,0,.2);
+    border-radius:12px;padding:10px;cursor:pointer;transition:all .15s;text-align:center;}
+  .save-card:hover{border-color:var(--gold);transform:translateY(-2px);}
+  .tag{background:rgba(255,255,255,.08);border-radius:6px;padding:2px 8px;
+    font-size:.68rem;color:rgba(255,255,255,.5);font-weight:700;}
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;
+    align-items:center;justify-content:center;z-index:100;backdrop-filter:blur(4px);}
+  .modal-box{background:linear-gradient(180deg,#1A1040 0%,#0D0820 100%);
+    border:2px solid rgba(255,215,0,.3);border-radius:20px;padding:24px;
+    width:min(420px,92vw);box-shadow:0 20px 60px rgba(0,0,0,.6);}
+
+  /* ── Combat styles ── */
+  @keyframes dmgFloat{0%{opacity:1;transform:translateY(0) scale(1);}
+    100%{opacity:0;transform:translateY(-55px) scale(1.4);}}
+  @keyframes healFloat{0%{opacity:1;transform:translateY(0);}
+    100%{opacity:0;transform:translateY(-45px);}}
+  @keyframes shake{0%,100%{transform:translateX(0);}
+    20%{transform:translateX(-8px);}40%{transform:translateX(8px);}
+    60%{transform:translateX(-5px);}80%{transform:translateX(5px);}}
+  @keyframes attackLunge{0%,100%{transform:translateX(0);}50%{transform:translateX(18px);}}
+  @keyframes enemyAttackLunge{0%,100%{transform:translateX(0);}50%{transform:translateX(-18px);}}
+  @keyframes flashRed{0%,100%{filter:none;}50%{filter:brightness(2) saturate(0) sepia(1) hue-rotate(300deg);}}
+  @keyframes flashGreen{0%,100%{filter:none;}50%{filter:brightness(1.8) saturate(3) hue-rotate(80deg);}}
+  @keyframes idleBob{0%,100%{transform:translateY(0);}50%{transform:translateY(-4px);}}
+  @keyframes bossFloat{0%,100%{transform:translateY(0) rotate(-1deg);}
+    50%{transform:translateY(-8px) rotate(1deg);}}
+  @keyframes levelInSlide{from{opacity:0;transform:translateY(30px);}to{opacity:1;transform:translateY(0);}}
+  @keyframes victoryBounce{0%,100%{transform:scale(1);}50%{transform:scale(1.06);}}
+  @keyframes pulseGold{0%,100%{box-shadow:0 0 12px rgba(255,215,0,.3);}
+    50%{box-shadow:0 0 28px rgba(255,215,0,.7);}}
+  @keyframes staffSpin{0%{transform:rotate(0deg) translateY(0);}
+    25%{transform:rotate(5deg) translateY(-6px);}
+    75%{transform:rotate(-5deg) translateY(-6px);}
+    100%{transform:rotate(0deg) translateY(0);}}
+  @keyframes cloudJump{0%,100%{transform:translateY(0) scaleX(1);}
+    30%{transform:translateY(-28px) scaleX(1.05);}
+    60%{transform:translateY(-20px) scaleX(.97);}}
+  @keyframes victoryPose{0%,100%{transform:translateY(0) rotate(0);}
+    20%{transform:translateY(-8px) rotate(-4deg);}
+    40%{transform:translateY(-8px) rotate(4deg);}
+    60%{transform:translateY(-4px) rotate(-2deg);}}
+  @keyframes somersault{0%{transform:rotate(0) translateY(0);}
+    30%{transform:rotate(-180deg) translateY(-30px);}
+    60%{transform:rotate(-360deg) translateY(-10px);}
+    100%{transform:rotate(-360deg) translateY(0);}}
+  .anim-idle{animation:idleBob 2.5s ease-in-out infinite;}
+  .anim-spin{animation:staffSpin .8s ease-in-out infinite;}
+  .anim-jump{animation:cloudJump .9s ease-in-out infinite;}
+  .anim-victory{animation:victoryPose 1s ease-in-out infinite;}
+  .anim-lunge{animation:attackLunge .35s ease-in-out;}
+  .anim-shake{animation:shake .4s ease-in-out;}
+  .anim-flashRed{animation:flashRed .3s ease-in-out;}
+  .anim-flashGreen{animation:flashGreen .3s ease-in-out;}
+  .anim-boss{animation:bossFloat 3s ease-in-out infinite;}
+  .anim-enemy-lunge{animation:enemyAttackLunge .35s ease-in-out;}
+  .dmg-num{position:absolute;font-family:'Fredoka One',cursive;font-weight:900;
+    pointer-events:none;animation:dmgFloat .9s ease-out forwards;z-index:30;
+    text-shadow:2px 2px 4px rgba(0,0,0,.8);}
+  .heal-num{position:absolute;font-family:'Fredoka One',cursive;font-weight:900;color:#4ade80;
+    pointer-events:none;animation:healFloat .9s ease-out forwards;z-index:30;
+    text-shadow:2px 2px 4px rgba(0,0,0,.8);}
+  .hp-track{background:rgba(0,0,0,.5);border-radius:999px;overflow:hidden;
+    border:1.5px solid rgba(255,255,255,.15);}
+  .hp-fill{height:100%;border-radius:999px;transition:width .4s ease;}
+  .hp-fill.player-hp{background:linear-gradient(90deg,#16a34a,#4ade80);}
+  .hp-fill.enemy-hp{background:linear-gradient(90deg,#dc2626,#f87171);}
+  .hp-fill.low{background:linear-gradient(90deg,#b91c1c,#ef4444);}
+  .hp-fill.critical{background:linear-gradient(90deg,#7f1d1d,#dc2626);
+    animation:pulseGold .6s ease-in-out infinite;}
+  .combat-arena{border-radius:20px;border:2px solid rgba(255,215,0,.2);
+    position:relative;overflow:hidden;min-height:300px;}
+  .enemy-card{background:rgba(255,255,255,.04);border-radius:14px;
+    border:2px solid transparent;padding:8px;cursor:pointer;transition:all .15s;
+    text-align:center;position:relative;}
+  .enemy-card:hover{border-color:rgba(255,215,0,.4);}
+  .enemy-card.targeted{border-color:var(--gold);background:rgba(255,215,0,.1);
+    box-shadow:0 0 18px rgba(255,215,0,.3);}
+  .enemy-card.dead{opacity:.3;filter:grayscale(1);pointer-events:none;}
+  .action-row{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
+  .cooldown-ring{position:absolute;inset:0;border-radius:10px;
+    background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;
+    font-size:.75rem;font-weight:900;color:rgba(255,255,255,.7);}
+  .level-clear-screen{animation:levelInSlide .5s ease-out;}
+  .combat-log{background:rgba(0,0,0,.4);border-radius:10px;padding:8px 12px;
+    font-size:.72rem;color:rgba(255,255,255,.6);font-weight:700;
+    border:1px solid rgba(255,255,255,.08);max-height:60px;overflow-y:auto;}
+  .level-map-btn{border-radius:14px;padding:14px 10px;cursor:pointer;border:2.5px solid transparent;
+    transition:all .2s;text-align:center;font-family:'Noto Sans SC',sans-serif;font-weight:900;}
+  .level-map-btn.unlocked{background:rgba(255,215,0,.08);border-color:rgba(255,215,0,.3);color:white;}
+  .level-map-btn.unlocked:hover{border-color:var(--gold);background:rgba(255,215,0,.15);
+    transform:translateY(-2px);}
+  .level-map-btn.locked{background:rgba(255,255,255,.03);border-color:rgba(255,255,255,.1);
+    color:rgba(255,255,255,.25);cursor:not-allowed;}
+  .level-map-btn.cleared{background:rgba(52,211,153,.1);border-color:#34d399;color:white;}
+  .stage-spotlight{position:absolute;top:-20%;left:50%;transform:translateX(-50%);
+    width:300px;height:500px;
+    background:conic-gradient(from 175deg at 50% 0%,transparent 0deg,rgba(255,215,0,.06) 5deg,transparent 10deg);
+    pointer-events:none;}
+  .stage-floor{position:absolute;bottom:0;left:0;right:0;height:60px;
+    background:linear-gradient(180deg,transparent 0%,rgba(255,215,0,.06) 100%);
+    border-top:2px solid rgba(255,215,0,.12);}
+  .music-wave{display:flex;align-items:flex-end;gap:2px;height:18px;}
+  .music-bar{width:4px;border-radius:2px;background:var(--gold);
+    animation:musicBounce var(--d,.6s) ease-in-out infinite alternate;}
+  @keyframes musicBounce{0%{height:4px;}100%{height:18px;}}
+  .progress-bar-track{background:rgba(0,0,0,.4);border-radius:999px;
+    border:2px solid rgba(255,215,0,.2);overflow:hidden;height:18px;}
+  .progress-bar-fill{height:100%;background:linear-gradient(90deg,var(--jade),var(--sky),var(--gold));
+    border-radius:999px;transition:width .1s linear;box-shadow:0 0 12px rgba(0,200,255,.6);}
+  .scan-line{position:absolute;left:0;right:0;height:3px;
+    background:linear-gradient(90deg,transparent,var(--sky),#00FFFF,var(--sky),transparent);
+    box-shadow:0 0 20px #00FFFF,0 0 40px #00FFFF80;
+    animation:scanSweep 1.8s ease-in-out infinite;pointer-events:none;}
+  @keyframes scanSweep{0%{top:0%;opacity:0;}10%{opacity:1;}90%{opacity:1;}100%{top:100%;opacity:0;}}
+  .move-btn{font-family:'Noto Sans SC',sans-serif;font-weight:900;
+    border:2px solid rgba(255,255,255,.15);border-radius:12px;padding:10px 14px;cursor:pointer;
+    background:rgba(255,255,255,.06);color:rgba(255,255,255,.7);font-size:.82rem;
+    transition:all .15s;display:flex;flex-direction:column;align-items:center;gap:2px;}
+  .move-btn:hover{background:rgba(255,215,0,.12);border-color:var(--gold);color:var(--gold);}
+  .move-btn.active{background:rgba(255,215,0,.2);border-color:var(--gold);color:var(--gold);
+    box-shadow:0 0 16px rgba(255,215,0,.3);}
+  .stage-bg{background:radial-gradient(ellipse at 50% 80%,rgba(255,100,0,.15) 0%,rgba(50,0,100,.3) 40%,transparent 70%),
+    linear-gradient(180deg,#0D0820 0%,#1A0830 100%);border-radius:20px;
+    border:2px solid rgba(255,215,0,.2);position:relative;overflow:hidden;}
+  @media(max-width:700px){.build-layout{grid-template-columns:1fr;}}
+`;
+
+// ══════════════════════════════════════════════════════════
+// 角色零件数据
+// ══════════════════════════════════════════════════════════
+const PARTS_CATALOG = {
+  head:[
+    {id:"h1",name:"经典猴脸",emoji:"🐵",color:"#C8874A",accent:"#E8A070",label:"活泼可爱"},
+    {id:"h2",name:"战士猴脸",emoji:"😤",color:"#8B4513",accent:"#A0522D",label:"威风凛凛"},
+    {id:"h3",name:"智者猴脸",emoji:"🧐",color:"#DEB887",accent:"#F5DEB3",label:"睿智老练"},
+    {id:"h4",name:"灵魂猴脸",emoji:"✨",color:"#9B59B6",accent:"#BB80D0",label:"神秘莫测"},
+  ],
+  torso:[
+    {id:"t1",name:"战袍",emoji:"👘",color:"#E8372A",accent:"#FFD700",label:"红丝绸"},
+    {id:"t2",name:"龙鳞甲",emoji:"🛡️",color:"#FFD700",accent:"#E8372A",label:"金色"},
+    {id:"t3",name:"云衣",emoji:"☁️",color:"#4A90D9",accent:"#87CEEB",label:"轻盈"},
+    {id:"t4",name:"虎皮袍",emoji:"🐯",color:"#D4801A",accent:"#FFA040",label:"狂野"},
+  ],
+  leftArm:[
+    {id:"la1",name:"标准左臂",emoji:"💪",color:"#C8874A",accent:"#E8A070",label:"普通"},
+    {id:"la2",name:"强力左臂",emoji:"🦾",color:"#8B4513",accent:"#A05030",label:"强壮"},
+    {id:"la3",name:"龙爪左臂",emoji:"🐉",color:"#2E8B57",accent:"#66CDAA",label:"龙系"},
+    {id:"la4",name:"护甲左臂",emoji:"🛡️",color:"#4169E1",accent:"#87CEFA",label:"铠甲"},
+  ],
+  rightArm:[
+    {id:"ra1",name:"标准右臂",emoji:"💪",color:"#C8874A",accent:"#E8A070",label:"普通"},
+    {id:"ra2",name:"强力右臂",emoji:"🦾",color:"#8B4513",accent:"#A05030",label:"强壮"},
+    {id:"ra3",name:"龙爪右臂",emoji:"🐉",color:"#2E8B57",accent:"#66CDAA",label:"龙系"},
+    {id:"ra4",name:"护甲右臂",emoji:"🛡️",color:"#4169E1",accent:"#87CEFA",label:"铠甲"},
+  ],
+  legs:[
+    {id:"l1",name:"战姿腿",emoji:"🦵",color:"#C8874A",accent:"#E8A070",label:"备战"},
+    {id:"l2",name:"矫健腿",emoji:"🏃",color:"#8B4513",accent:"#A05030",label:"迅捷"},
+    {id:"l3",name:"龙鳞腿",emoji:"🐉",color:"#2E8B57",accent:"#66CDAA",label:"龙系"},
+    {id:"l4",name:"云靴腿",emoji:"☁️",color:"#9370DB",accent:"#DA70D6",label:"踏云"},
+  ],
+};
+const ZONE_CONFIG=[
+  {id:"head",label:"头部",area:"head",emoji:"😊"},
+  {id:"torso",label:"躯干",area:"torso",emoji:"👕"},
+  {id:"leftArm",label:"左臂",area:"larm",emoji:"💪"},
+  {id:"rightArm",label:"右臂",area:"rarm",emoji:"💪"},
+  {id:"legs",label:"腿部",area:"legs",emoji:"🦵"},
+];
+const CUSTOM_CATALOG={
+  tail:[
+    {id:"t_curl",name:"卷曲尾",emoji:"🌀",color:"#C8874A"},
+    {id:"t_str",name:"抓握尾",emoji:"🐒",color:"#8B4513"},
+    {id:"t_flame",name:"火焰尾",emoji:"🔥",color:"#FF4500"},
+  ],
+  staff:[
+    {id:"s_gold",name:"金箍棒",emoji:"✨",color:"#FFD700"},
+    {id:"s_rune",name:"符文棒",emoji:"📜",color:"#9B59B6"},
+    {id:"s_glow",name:"霓虹棒",emoji:"💡",color:"#00FFFF"},
+  ],
+  accessories:[
+    {id:"acc_crown",name:"金冠",emoji:"👑"},
+    {id:"acc_armor",name:"护肩甲",emoji:"🔰"},
+    {id:"acc_skirt",name:"虎皮裙",emoji:"🐯"},
+  ],
+};
+const MOVES=[
+  {id:"spin",name:"棒法旋转",emoji:"🌪️",animClass:"anim-spin"},
+  {id:"jump",name:"腾云驾雾",emoji:"☁️",animClass:"anim-jump"},
+  {id:"victory",name:"胜利姿势",emoji:"🏆",animClass:"anim-victory"},
+  {id:"stance",name:"战斗准备",emoji:"⚔️",animClass:"anim-spin"},
+  {id:"fly",name:"筋斗翻腾",emoji:"🤸",animClass:"anim-jump"},
+];
+
+// ══════════════════════════════════════════════════════════
+// 关卡数据
+// ══════════════════════════════════════════════════════════
+const LEVELS=[
+  {id:1,name:"蜘蛛洞穴",subtitle:"第一关",
+   bg:"linear-gradient(160deg,#0a1a05 0%,#152510 100%)",
+   enemies:[
+    {id:"sp1",name:"小蜘蛛甲",type:"spider",hp:150,maxHp:150,atk:[15,28]},
+    {id:"sp2",name:"小蜘蛛乙",type:"spider",hp:150,maxHp:150,atk:[15,28]},
+    {id:"sp3",name:"小蜘蛛丙",type:"spider",hp:120,maxHp:120,atk:[12,22]},
+  ]},
+  {id:2,name:"六耳猕猴与八爪妖",subtitle:"第二关",
+   bg:"linear-gradient(160deg,#200a0a 0%,#1a0a1a 100%)",
+   enemies:[
+    {id:"liuer",name:"六耳猕猴",type:"liuer",hp:400,maxHp:400,atk:[35,60]},
+    {id:"octo",name:"八爪妖怪",type:"octopus",hp:350,maxHp:350,atk:[28,50]},
+  ]},
+  {id:3,name:"东海龙王",subtitle:"第三关",
+   bg:"linear-gradient(160deg,#051a2a 0%,#0a1a3a 100%)",
+   enemies:[
+    {id:"dragonking",name:"东海龙王",type:"dragonking",hp:600,maxHp:600,atk:[45,78]},
+  ]},
+  {id:4,name:"九头妖魔",subtitle:"第四关",
+   bg:"linear-gradient(160deg,#1a0a0a 0%,#2a0a05 100%)",
+   enemies:[
+    {id:"nineheads",name:"九头妖魔",type:"nineheads",hp:800,maxHp:800,atk:[55,90]},
+  ]},
+  {id:5,name:"牛魔王三怪",subtitle:"第五关",
+   bg:"linear-gradient(160deg,#1a0505 0%,#250808 100%)",
+   enemies:[
+    {id:"bull",name:"牛魔王",type:"bull",hp:600,maxHp:600,atk:[65,100]},
+    {id:"ironfan",name:"铁扇公主",type:"ironfan",hp:400,maxHp:400,atk:[48,78]},
+    {id:"redboy",name:"红孩儿",type:"redboy",hp:300,maxHp:300,atk:[40,68]},
+  ]},
+  {id:6,name:"天宫大战",subtitle:"第六关",
+   bg:"linear-gradient(160deg,#0a0a1a 0%,#151530 100%)",
+   enemies:[
+    {id:"hg1",name:"天兵甲",type:"heavenguard",hp:280,maxHp:280,atk:[42,65]},
+    {id:"hg2",name:"天兵乙",type:"heavenguard",hp:280,maxHp:280,atk:[42,65]},
+    {id:"hgen",name:"天将",type:"heavengeneral",hp:500,maxHp:500,atk:[58,88]},
+  ]},
+  {id:7,name:"白骨夫人",subtitle:"第七关 · 最终决战",
+   bg:"linear-gradient(160deg,#050505 0%,#100a10 100%)",
+   enemies:[
+    {id:"baigu",name:"白骨夫人",type:"baigu",hp:2458,maxHp:2458,atk:[80,135]},
+  ]},
+];
+
+// ══════════════════════════════════════════════════════════
+// 音效 Hook
+// ══════════════════════════════════════════════════════════
+function useGameAudio(){
+  const ctxRef=useRef(null);
+  const loopRef=useRef(null);
+  const getCtx=useCallback(()=>{
+    if(!ctxRef.current) ctxRef.current=new(window.AudioContext||window.webkitAudioContext)();
+    return ctxRef.current;
+  },[]);
+  const playTone=useCallback((freq,dur=0.12,type="square",vol=0.15)=>{
+    try{
+      const ctx=getCtx(),osc=ctx.createOscillator(),gain=ctx.createGain();
+      osc.connect(gain);gain.connect(ctx.destination);
+      osc.frequency.value=freq;osc.type=type;
+      gain.gain.setValueAtTime(vol,ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+dur);
+      osc.start(ctx.currentTime);osc.stop(ctx.currentTime+dur);
+    }catch(_){}
+  },[getCtx]);
+  const startMusic=useCallback(()=>{
+    const ctx=getCtx();
+    if(ctx.state==="suspended")ctx.resume();
+    const noteSeq=[523,659,784,698,523,440,587,659];
+    const drumSeq=[1,0,1,0,1,0,1,1];
+    let step=0;
+    loopRef.current=setInterval(()=>{
+      playTone(noteSeq[step%noteSeq.length],0.18,"triangle",0.09);
+      if(drumSeq[step%drumSeq.length])playTone(80,0.08,"square",0.12);
+      if(step%4===2)playTone(300,0.05,"square",0.06);
+      step++;
+    },275);
+  },[getCtx,playTone]);
+  const stopMusic=useCallback(()=>clearInterval(loopRef.current),[]);
+  const playScanSound=useCallback(()=>{
+    [400,600,800,1000,1400].forEach((f,i)=>setTimeout(()=>playTone(f,0.15,"sine",0.12),i*160));
+  },[playTone]);
+  const playSuccessSound=useCallback(()=>{
+    [523,659,784,1046].forEach((f,i)=>setTimeout(()=>playTone(f,0.25,"triangle",0.15),i*100));
+  },[playTone]);
+  const playClickSound=useCallback(()=>playTone(880,0.05,"square",0.07),[playTone]);
+  const playHitSound=useCallback(()=>{
+    playTone(200,0.08,"square",0.2);
+    setTimeout(()=>playTone(150,0.12,"sawtooth",0.15),40);
+  },[playTone]);
+  const playHealSound=useCallback(()=>{
+    [800,1000,1200].forEach((f,i)=>setTimeout(()=>playTone(f,0.1,"sine",0.1),i*60));
+  },[playTone]);
+  const playLevelClearSound=useCallback(()=>{
+    [523,659,784,1046,1318].forEach((f,i)=>setTimeout(()=>playTone(f,0.3,"triangle",0.18),i*120));
+  },[playTone]);
+  return{startMusic,stopMusic,playScanSound,playSuccessSound,playClickSound,playHitSound,playHealSound,playLevelClearSound};
+}
+
+// ══════════════════════════════════════════════════════════
+// 大猴子 SVG（保留原有设计）
+// ══════════════════════════════════════════════════════════
+function CharacterSVG({build,customization,animClass="anim-idle",size=200}){
+  const hp=PARTS_CATALOG.head.find(p=>p.id===build.head)||PARTS_CATALOG.head[0];
+  const tp=PARTS_CATALOG.torso.find(p=>p.id===build.torso)||PARTS_CATALOG.torso[0];
+  const lp=PARTS_CATALOG.leftArm.find(p=>p.id===build.leftArm)||PARTS_CATALOG.leftArm[0];
+  const rp=PARTS_CATALOG.rightArm.find(p=>p.id===build.rightArm)||PARTS_CATALOG.rightArm[0];
+  const legP=PARTS_CATALOG.legs.find(p=>p.id===build.legs)||PARTS_CATALOG.legs[0];
+  const tailOption=CUSTOM_CATALOG.tail.find(t=>t.id===customization.tail)||CUSTOM_CATALOG.tail[0];
+  const staffOpt=CUSTOM_CATALOG.staff.find(s=>s.id===customization.staff)||CUSTOM_CATALOG.staff[0];
+  const accs=customization.accessories||[];
+  const hasArmor=accs.includes("acc_armor"),hasCrown=accs.includes("acc_crown"),hasSkirt=accs.includes("acc_skirt");
+  return(
+    <svg viewBox="0 0 200 300" width={size} height={size*1.5} className={animClass}
+      style={{transformOrigin:"50% 85%",overflow:"visible"}}>
+      <ellipse cx="100" cy="288" rx="44" ry="10" fill="rgba(0,0,0,0.25)"/>
+      {tailOption.id==="t_curl"&&<path d="M125 195 Q170 175 172 148 Q174 120 155 112" stroke={tailOption.color} strokeWidth={9} fill="none" strokeLinecap="round"/>}
+      {tailOption.id==="t_str"&&<line x1="128" y1="195" x2="185" y2="130" stroke={tailOption.color} strokeWidth={9} strokeLinecap="round"/>}
+      {tailOption.id==="t_flame"&&<><path d="M128 195 Q168 178 170 155 Q172 130 152 115" stroke={tailOption.color} strokeWidth={10} fill="none" strokeLinecap="round"/><circle cx="152" cy="110" r="9" fill={tailOption.color} opacity="0.8"/><circle cx="155" cy="104" r="5" fill="#FFD700" opacity="0.9"/></>}
+      <rect x={154} y={88} width={10} height={132} rx={4} fill={staffOpt.color}/>
+      {staffOpt.id==="s_rune"&&<><circle cx={159} cy={100} r={7} fill={staffOpt.color} stroke="#fff" strokeWidth={1.5}/><circle cx={159} cy={205} r={7} fill={staffOpt.color} stroke="#fff" strokeWidth={1.5}/>{[120,140,160,180].map(y=><rect key={y} x={156} y={y} width={6} height={3} rx={1} fill="rgba(255,255,255,0.5)"/>)}</>}
+      {staffOpt.id==="s_glow"&&<><line x1={159} y1={88} x2={159} y2={220} stroke={staffOpt.color} strokeWidth={14} strokeOpacity={0.2}/><circle cx={159} cy={92} r={8} fill={staffOpt.color} opacity={0.9}/><circle cx={159} cy={216} r={8} fill={staffOpt.color} opacity={0.9}/></>}
+      {legP.id==="l1"&&<><rect x={62} y={188} width={32} height={74} rx={8} fill={legP.color}/><rect x={106} y={188} width={32} height={74} rx={8} fill={legP.color}/><line x1={70} y1={205} x2={70} y2={248} stroke={legP.accent} strokeWidth={2} strokeOpacity={0.4}/><line x1={122} y1={205} x2={122} y2={248} stroke={legP.accent} strokeWidth={2} strokeOpacity={0.4}/><rect x={54} y={254} width={44} height={20} rx={9} fill="#333"/><rect x={102} y={254} width={44} height={20} rx={9} fill="#333"/></>}
+      {legP.id==="l2"&&<><rect x={64} y={188} width={28} height={74} rx={6} fill={legP.color}/><rect x={108} y={188} width={28} height={74} rx={6} fill={legP.color}/><rect x={62} y={218} width={32} height={10} rx={5} fill={legP.accent} opacity={0.6}/><rect x={106} y={218} width={32} height={10} rx={5} fill={legP.accent} opacity={0.6}/><rect x={56} y={254} width={40} height={18} rx={8} fill={legP.color}/><rect x={100} y={254} width={40} height={18} rx={8} fill={legP.color}/><rect x={56} y={254} width={40} height={8} rx={8} fill={legP.accent} opacity={0.5}/><rect x={100} y={254} width={40} height={8} rx={8} fill={legP.accent} opacity={0.5}/></>}
+      {legP.id==="l3"&&<><rect x={58} y={188} width={38} height={74} rx={8} fill={legP.color}/><rect x={104} y={188} width={38} height={74} rx={8} fill={legP.color}/>{[198,212,226,240].map(y=><><rect key={"ll"+y} x={60} y={y} width={34} height={7} rx={3} fill={legP.accent} opacity={0.3}/><rect key={"rl"+y} x={106} y={y} width={34} height={7} rx={3} fill={legP.accent} opacity={0.3}/></>)}<ellipse cx={66} cy={265} rx={7} ry={10} fill={legP.color} transform="rotate(-18,66,265)"/><ellipse cx={78} cy={268} rx={7} ry={11} fill={legP.color}/><ellipse cx={90} cy={265} rx={7} ry={10} fill={legP.color} transform="rotate(18,90,265)"/><ellipse cx={112} cy={265} rx={7} ry={10} fill={legP.color} transform="rotate(-18,112,265)"/><ellipse cx={124} cy={268} rx={7} ry={11} fill={legP.color}/><ellipse cx={136} cy={265} rx={7} ry={10} fill={legP.color} transform="rotate(18,136,265)"/></>}
+      {legP.id==="l4"&&<><rect x={65} y={188} width={26} height={66} rx={7} fill={legP.color}/><rect x={109} y={188} width={26} height={66} rx={7} fill={legP.color}/><ellipse cx={78} cy={264} rx={24} ry={12} fill={legP.accent}/><ellipse cx={122} cy={264} rx={24} ry={12} fill={legP.accent}/><circle cx={60} cy={259} r={10} fill={legP.accent}/><circle cx={74} cy={256} r={12} fill={legP.accent}/><circle cx={90} cy={259} r={10} fill={legP.accent}/><circle cx={104} cy={259} r={10} fill={legP.accent}/><circle cx={118} cy={256} r={12} fill={legP.accent}/><circle cx={134} cy={259} r={10} fill={legP.accent}/><ellipse cx={78} cy={266} rx={16} ry={7} fill="rgba(255,255,255,0.25)"/><ellipse cx={122} cy={266} rx={16} ry={7} fill="rgba(255,255,255,0.25)"/></>}
+      {hasSkirt&&<rect x={48} y={178} width={104} height={22} rx={6} fill="#F4A030" stroke="#8B4513" strokeWidth={2} opacity={0.95}/>}
+      <rect x={46} y={90} width={108} height={102} rx={10} fill={tp.color}/>
+      <rect x={68} y={106} width={64} height={5} rx={2} fill={tp.accent} opacity={0.5}/>
+      <rect x={68} y={118} width={64} height={5} rx={2} fill={tp.accent} opacity={0.35}/>
+      <rect x={68} y={130} width={64} height={5} rx={2} fill={tp.accent} opacity={0.2}/>
+      <rect x={46} y={170} width={108} height={14} rx={4} fill="rgba(0,0,0,0.25)"/>
+      <circle cx={100} cy={177} r={7} fill={tp.accent}/>
+      {hasArmor&&<><rect x={6} y={90} width={46} height={22} rx={8} fill="#FFD700"/><rect x={148} y={90} width={46} height={22} rx={8} fill="#FFD700"/><rect x={6} y={90} width={46} height={22} rx={8} fill="rgba(0,0,0,0)" stroke="#D4A017" strokeWidth={2}/><rect x={148} y={90} width={46} height={22} rx={8} fill="rgba(0,0,0,0)" stroke="#D4A017" strokeWidth={2}/></>}
+      {lp.id==="la1"&&<><rect x={10} y={96} width={38} height={76} rx={8} fill={lp.color}/><rect x={14} y={108} width={30} height={4} rx={2} fill={lp.accent} opacity={0.4}/><circle cx={29} cy={178} r={11} fill={lp.color}/></>}
+      {rp.id==="ra1"&&<><rect x={152} y={96} width={38} height={76} rx={8} fill={rp.color}/><rect x={156} y={108} width={30} height={4} rx={2} fill={rp.accent} opacity={0.4}/><circle cx={171} cy={178} r={11} fill={rp.color}/></>}
+      {lp.id==="la2"&&<><rect x={6} y={96} width={44} height={80} rx={10} fill={lp.color}/><rect x={10} y={110} width={36} height={5} rx={2} fill={lp.accent} opacity={0.5}/><rect x={10} y={122} width={36} height={5} rx={2} fill={lp.accent} opacity={0.35}/><circle cx={28} cy={180} r={14} fill={lp.color}/><circle cx={28} cy={180} r={8} fill={lp.accent} opacity={0.3}/></>}
+      {rp.id==="ra2"&&<><rect x={150} y={96} width={44} height={80} rx={10} fill={rp.color}/><rect x={154} y={110} width={36} height={5} rx={2} fill={rp.accent} opacity={0.5}/><rect x={154} y={122} width={36} height={5} rx={2} fill={rp.accent} opacity={0.35}/><circle cx={172} cy={180} r={14} fill={rp.color}/><circle cx={172} cy={180} r={8} fill={rp.accent} opacity={0.3}/></>}
+      {lp.id==="la3"&&<><rect x={10} y={96} width={38} height={76} rx={8} fill={lp.color}/>{[105,118,131,144].map(y=><rect key={y} x={12} y={y} width={34} height={6} rx={3} fill={lp.accent} opacity={0.35}/>)}<ellipse cx={20} cy={180} rx={5} ry={10} fill={lp.color} transform="rotate(-15,20,180)"/><ellipse cx={29} cy={183} rx={5} ry={11} fill={lp.color}/><ellipse cx={38} cy={180} rx={5} ry={10} fill={lp.color} transform="rotate(15,38,180)"/><path d="M16 173 L14 165" stroke={lp.accent} strokeWidth={2.5} strokeLinecap="round"/><path d="M29 172 L29 163" stroke={lp.accent} strokeWidth={2.5} strokeLinecap="round"/><path d="M42 173 L44 165" stroke={lp.accent} strokeWidth={2.5} strokeLinecap="round"/></>}
+      {rp.id==="ra3"&&<><rect x={152} y={96} width={38} height={76} rx={8} fill={rp.color}/>{[105,118,131,144].map(y=><rect key={y} x={154} y={y} width={34} height={6} rx={3} fill={rp.accent} opacity={0.35}/>)}<ellipse cx={162} cy={180} rx={5} ry={10} fill={rp.color} transform="rotate(-15,162,180)"/><ellipse cx={171} cy={183} rx={5} ry={11} fill={rp.color}/><ellipse cx={180} cy={180} rx={5} ry={10} fill={rp.color} transform="rotate(15,180,180)"/><path d="M158 173 L156 165" stroke={rp.accent} strokeWidth={2.5} strokeLinecap="round"/><path d="M171 172 L171 163" stroke={rp.accent} strokeWidth={2.5} strokeLinecap="round"/><path d="M184 173 L186 165" stroke={rp.accent} strokeWidth={2.5} strokeLinecap="round"/></>}
+      {lp.id==="la4"&&<><rect x={10} y={96} width={38} height={76} rx={8} fill={lp.color}/><rect x={9} y={96} width={40} height={18} rx={6} fill={lp.accent} opacity={0.7} stroke={lp.color} strokeWidth={1}/><rect x={9} y={116} width={40} height={16} rx={4} fill={lp.accent} opacity={0.55} stroke={lp.color} strokeWidth={1}/><rect x={9} y={134} width={40} height={16} rx={4} fill={lp.accent} opacity={0.4} stroke={lp.color} strokeWidth={1}/><rect x={8} y={152} width={42} height={18} rx={6} fill={lp.accent} opacity={0.8} stroke="rgba(255,255,255,0.3)" strokeWidth={1.5}/><circle cx={29} cy={178} r={11} fill={lp.color}/></>}
+      {rp.id==="ra4"&&<><rect x={152} y={96} width={38} height={76} rx={8} fill={rp.color}/><rect x={151} y={96} width={40} height={18} rx={6} fill={rp.accent} opacity={0.7} stroke={rp.color} strokeWidth={1}/><rect x={151} y={116} width={40} height={16} rx={4} fill={rp.accent} opacity={0.55} stroke={rp.color} strokeWidth={1}/><rect x={151} y={134} width={40} height={16} rx={4} fill={rp.accent} opacity={0.4} stroke={rp.color} strokeWidth={1}/><rect x={150} y={152} width={42} height={18} rx={6} fill={rp.accent} opacity={0.8} stroke="rgba(255,255,255,0.3)" strokeWidth={1.5}/><circle cx={171} cy={178} r={11} fill={rp.color}/></>}
+      {/* 头部 */}
+      <circle cx={56} cy={43} r={15} fill={hp.color}/>
+      <circle cx={144} cy={43} r={15} fill={hp.color}/>
+      <circle cx={100} cy={49} r={45} fill={hp.color}/>
+      <circle cx={56} cy={43} r={9} fill={hp.accent}/>
+      <circle cx={144} cy={43} r={9} fill={hp.accent}/>
+      <ellipse cx={100} cy={60} rx={27} ry={24} fill={hp.accent} opacity={0.5}/>
+      {hasCrown?<><rect x={60} y={13} width={80} height={16} rx={5} fill="#FFD700"/>{[66,80,94,108,122].map(x=><polygon key={x} points={`${x},14 ${x+7},3 ${x+14},14`} fill="#FFD700"/>)}</>:<rect x={62} y={16} width={76} height={12} rx={5} fill="#FF4444" opacity={0.85}/>}
+      <path d="M71 40 Q100 31 129 40" stroke={hp.color} strokeWidth={9} fill="none" strokeLinecap="round"/>
+      <path d="M71 40 Q100 31 129 40" stroke="rgba(0,0,0,0.2)" strokeWidth={4} fill="none" strokeLinecap="round"/>
+      <circle cx={83} cy={50} r={9} fill="white"/><circle cx={117} cy={50} r={9} fill="white"/>
+      <circle cx={85} cy={51} r={6} fill="#1A1A2E"/><circle cx={119} cy={51} r={6} fill="#1A1A2E"/>
+      <circle cx={87} cy={49} r={2} fill="white"/><circle cx={121} cy={49} r={2} fill="white"/>
+      <ellipse cx={100} cy={70} rx={13} ry={10} fill={hp.accent}/>
+      <path d="M94 64 Q100 62 106 64" stroke={hp.color} strokeWidth={2} fill="none" strokeLinecap="round" opacity={0.55}/>
+      <ellipse cx={94} cy={68} rx={3.5} ry={2.5} fill={hp.color} opacity={0.6} transform="rotate(-8,94,68)"/>
+      <ellipse cx={106} cy={68} rx={3.5} ry={2.5} fill={hp.color} opacity={0.6} transform="rotate(8,106,68)"/>
+      <path d="M90 76 Q100 83 110 76" stroke="#7A4010" strokeWidth={2.5} fill="none" strokeLinecap="round"/>
+      {hp.id==="h3"&&<><path d="M71 38 Q82 31 92 38" stroke="#8B4513" strokeWidth={2.5} fill="none" strokeLinecap="round"/><path d="M108 38 Q118 31 129 38" stroke="#8B4513" strokeWidth={2.5} fill="none" strokeLinecap="round"/></>}
+      {hp.id==="h2"&&<><line x1={83} y1={38} x2={83} y2={50} stroke="#E63329" strokeWidth={2}/><line x1={117} y1={38} x2={117} y2={50} stroke="#E63329" strokeWidth={2}/></>}
+      {hp.id==="h4"&&[[-22,-8],[22,-8],[0,-21],[-14,7],[14,7]].map(([dx,dy],i)=><text key={i} x={100+dx} y={49+dy} fontSize={8} textAnchor="middle" dominantBaseline="middle" opacity={0.8}>✦</text>)}
+    </svg>
+  );
+}
+
+// ══════════════════════════════════════════════════════════
+// 小猴子 SVG（黑发 + 紫色眉毛 + 亮眼神）
+// ══════════════════════════════════════════════════════════
+function SmallMonkeySVG({animClass="anim-idle",size=70}){
+  // Small monkey body: viewBox 100x150, displays at ~shin height of big monkey
+  return(
+    <svg viewBox="0 0 100 150" width={size} height={size*1.5} className={animClass}
+      style={{transformOrigin:"50% 85%",overflow:"visible"}}>
+      <ellipse cx="50" cy="144" rx="22" ry="5" fill="rgba(0,0,0,0.25)"/>
+      {/* 卷曲尾巴 */}
+      <path d="M62 97 Q85 87 86 74 Q87 60 77 56" stroke="#C8874A" strokeWidth={5} fill="none" strokeLinecap="round"/>
+      {/* 金箍棒（迷你版） */}
+      <rect x={76} y={44} width={6} height={66} rx={2} fill="#FFD700"/>
+      <circle cx={79} cy={47} r={5} fill="#FFD700" stroke="#fff" strokeWidth={1}/>
+      <circle cx={79} cy={107} r={5} fill="#FFD700" stroke="#fff" strokeWidth={1}/>
+      {/* 腿 */}
+      <rect x={31} y={94} width={16} height={38} rx={5} fill="#C8874A"/>
+      <rect x={53} y={94} width={16} height={38} rx={5} fill="#C8874A"/>
+      <rect x={27} y={127} width={22} height={11} rx={5} fill="#333"/>
+      <rect x={51} y={127} width={22} height={11} rx={5} fill="#333"/>
+      {/* 躯干 */}
+      <rect x={23} y={45} width={54} height={52} rx={7} fill="#E8372A"/>
+      <rect x={34} y={54} width={32} height={3} rx={1} fill="#FFD700" opacity={0.6}/>
+      <rect x={34} y={61} width={32} height={3} rx={1} fill="#FFD700" opacity={0.4}/>
+      <rect x={23} y={85} width={54} height={8} rx={3} fill="rgba(0,0,0,0.25)"/>
+      <circle cx={50} cy={89} r={4} fill="#FFD700"/>
+      {/* 手臂 */}
+      <rect x={5} y={48} width={20} height={38} rx={5} fill="#C8874A"/>
+      <rect x={75} y={48} width={20} height={38} rx={5} fill="#C8874A"/>
+      <circle cx={15} cy={89} r={7} fill="#C8874A"/>
+      <circle cx={85} cy={89} r={7} fill="#C8874A"/>
+      {/* 头 */}
+      {/* 耳朵 */}
+      <circle cx={28} cy={22} r={9} fill="#C8874A"/>
+      <circle cx={72} cy={22} r={9} fill="#C8874A"/>
+      <circle cx={28} cy={22} r={5} fill="#E8A070"/>
+      <circle cx={72} cy={22} r={5} fill="#E8A070"/>
+      {/* 头部主体 */}
+      <circle cx={50} cy={25} r={23} fill="#C8874A"/>
+      {/* 黑发 */}
+      <ellipse cx={50} cy={10} rx={20} ry={10} fill="#1a1a1a"/>
+      <ellipse cx={50} cy={8} rx={18} ry={8} fill="#111"/>
+      {/* 刘海 */}
+      <path d="M32 14 Q38 8 50 7 Q62 8 68 14" fill="#1a1a1a"/>
+      {/* 面部浅色区 */}
+      <ellipse cx={50} cy={30} rx={14} ry={12} fill="#E8A070" opacity={0.5}/>
+      {/* 紫色眉毛 */}
+      <path d="M36 20 Q43 16 50 19" stroke="#7B2FBE" strokeWidth={2.5} fill="none" strokeLinecap="round"/>
+      <path d="M50 19 Q57 16 64 20" stroke="#7B2FBE" strokeWidth={2.5} fill="none" strokeLinecap="round"/>
+      {/* 眼睛 */}
+      <circle cx={42} cy={26} r={5} fill="white"/>
+      <circle cx={58} cy={26} r={5} fill="white"/>
+      <circle cx={43} cy={27} r={3.2} fill="#1A1A2E"/>
+      <circle cx={59} cy={27} r={3.2} fill="#1A1A2E"/>
+      {/* 眼神光（高光亮点）*/}
+      <circle cx={44.5} cy={25.5} r={1.4} fill="white"/>
+      <circle cx={60.5} cy={25.5} r={1.4} fill="white"/>
+      <circle cx={43.2} cy={28} r={0.7} fill="rgba(255,255,255,0.6)"/>
+      <circle cx={59.2} cy={28} r={0.7} fill="rgba(255,255,255,0.6)"/>
+      {/* 嘴吻 */}
+      <ellipse cx={50} cy={35} rx={7} ry={5} fill="#E8A070"/>
+      <ellipse cx={47} cy={34} rx={2} ry={1.5} fill="#C8874A" opacity={0.6}/>
+      <ellipse cx={53} cy={34} rx={2} ry={1.5} fill="#C8874A" opacity={0.6}/>
+      <path d="M45 38 Q50 42 55 38" stroke="#7A4010" strokeWidth={1.5} fill="none" strokeLinecap="round"/>
+    </svg>
+  );
+}
+
+// ══════════════════════════════════════════════════════════
+// 敌人 SVG 组件
+// ══════════════════════════════════════════════════════════
+function SpiderSVG({size=100,isHurt=false}){
+  return(
+    <svg viewBox="0 0 120 100" width={size} height={size*0.83} className={isHurt?"anim-shake":"anim-idle"}
+      style={{transformOrigin:"50% 50%",overflow:"visible"}}>
+      {/* 8条腿 */}
+      {[[-55,-20],[-55,10],[-55,40],[55,-20],[55,10],[55,40]].map(([dx,dy],i)=>(
+        <line key={i} x1={60} y1={50} x2={60+dx} y2={50+dy} stroke="#1a0a2e" strokeWidth={3} strokeLinecap="round"/>
+      ))}
+      <line x1={60} y1={45} x2={20} y2={20} stroke="#1a0a2e" strokeWidth={3} strokeLinecap="round"/>
+      <line x1={60} y1={45} x2={100} y2={20} stroke="#1a0a2e" strokeWidth={3} strokeLinecap="round"/>
+      {/* 腹部 */}
+      <ellipse cx={60} cy={62} rx={22} ry={28} fill="#2a1a4a"/>
+      <ellipse cx={60} cy={58} rx={18} ry={14} fill="#3d2060"/>
+      {/* 沙漏纹 */}
+      <path d="M52 54 L60 62 L68 54 M52 70 L60 62 L68 70" fill="#cc3300" stroke="#cc3300" strokeWidth={1.5}/>
+      {/* 头部 */}
+      <circle cx={60} cy={38} r={18} fill="#2a1a4a"/>
+      <circle cx={60} cy={36} r={14} fill="#3d2060"/>
+      {/* 8只眼睛 */}
+      {[[52,32],[58,30],[64,30],[70,32],[52,38],[58,40],[64,40],[70,38]].map(([ex,ey],i)=>(
+        <circle key={i} cx={ex} cy={ey} r={2.5} fill={i<4?"#ff3300":"#ff6600"}/>
+      ))}
+      {/* 螯肢 */}
+      <path d="M54 48 Q48 54 46 60" stroke="#1a0a2e" strokeWidth={3} fill="none" strokeLinecap="round"/>
+      <path d="M66 48 Q72 54 74 60" stroke="#1a0a2e" strokeWidth={3} fill="none" strokeLinecap="round"/>
+    </svg>
+  );
+}
+
+function LiuerSVG({size=140,isHurt=false}){
+  return(
+    <svg viewBox="0 0 200 300" width={size} height={size*1.5} className={isHurt?"anim-shake":"anim-idle"}
+      style={{transformOrigin:"50% 85%",overflow:"visible"}}>
+      <ellipse cx="100" cy="288" rx="40" ry="9" fill="rgba(0,0,0,0.25)"/>
+      <path d="M128 195 Q170 170 172 145 Q174 118 154 110" stroke="#8B0000" strokeWidth={9} fill="none" strokeLinecap="round"/>
+      <rect x={152} y={85} width={11} height={135} rx={4} fill="#8B0000"/>
+      <circle cx={158} cy={95} r={8} fill="#8B0000" stroke="#ff0000" strokeWidth={1.5}/>
+      <circle cx={158} cy={213} r={8} fill="#8B0000" stroke="#ff0000" strokeWidth={1.5}/>
+      <rect x={60} y={188} width={32} height={76} rx={8} fill="#5a2a00"/>
+      <rect x={108} y={188} width={32} height={76} rx={8} fill="#5a2a00"/>
+      <rect x={52} y={255} width={44} height={20} rx={9} fill="#1a0a00"/>
+      <rect x={104} y={255} width={44} height={20} rx={9} fill="#1a0a00"/>
+      <rect x={44} y={88} width={112} height={104} rx={10} fill="#8B0000"/>
+      <rect x={66} y={104} width={68} height={5} rx={2} fill="#ff4444" opacity={0.5}/>
+      <rect x={44} y={170} width={112} height={14} rx={4} fill="rgba(0,0,0,0.3)"/>
+      <circle cx={100} cy={177} r={7} fill="#ff4444"/>
+      <rect x={8} y={94} width={40} height={78} rx={8} fill="#5a2a00"/>
+      <rect x={152} y={94} width={40} height={78} rx={8} fill="#5a2a00"/>
+      <circle cx={28} cy={176} r={11} fill="#5a2a00"/>
+      <circle cx={172} cy={176} r={11} fill="#5a2a00"/>
+      {/* 头 */}
+      <circle cx={54} cy={42} r={15} fill="#5a2a00"/>
+      <circle cx={146} cy={42} r={15} fill="#5a2a00"/>
+      <circle cx={100} cy={48} r={46} fill="#5a2a00"/>
+      <circle cx={54} cy={42} r={9} fill="#7a3a00"/>
+      <circle cx={146} cy={42} r={9} fill="#7a3a00"/>
+      <ellipse cx={100} cy={60} rx={28} ry={24} fill="#7a3a00" opacity={0.5}/>
+      {/* 头带（黑色） */}
+      <rect x={60} y={15} width={80} height={12} rx={5} fill="#1a0000"/>
+      {/* 眉骨（愤怒下压）*/}
+      <path d="M70 37 Q100 28 130 37" stroke="#5a2a00" strokeWidth={9} fill="none" strokeLinecap="round"/>
+      <path d="M70 37 Q100 28 130 37" stroke="rgba(0,0,0,0.3)" strokeWidth={4} fill="none" strokeLinecap="round"/>
+      {/* 皱眉 */}
+      <path d="M73 36 Q83 31 90 36" stroke="#cc0000" strokeWidth={3} fill="none" strokeLinecap="round"/>
+      <path d="M110 36 Q117 31 127 36" stroke="#cc0000" strokeWidth={3} fill="none" strokeLinecap="round"/>
+      {/* 发光红眼 */}
+      <circle cx={82} cy={49} r={10} fill="#ff0000" opacity={0.3}/>
+      <circle cx={118} cy={49} r={10} fill="#ff0000" opacity={0.3}/>
+      <circle cx={82} cy={49} r={7} fill="#ff0000"/>
+      <circle cx={118} cy={49} r={7} fill="#ff0000"/>
+      <circle cx={84} cy={47} r={2.5} fill="#ffaaaa"/>
+      <circle cx={120} cy={47} r={2.5} fill="#ffaaaa"/>
+      {/* 愤怒嘴 */}
+      <ellipse cx={100} cy={70} rx={12} ry={9} fill="#7a3a00"/>
+      <path d="M92 76 Q100 70 108 76" stroke="#1a0000" strokeWidth={2.5} fill="none" strokeLinecap="round"/>
+      <path d="M88 64 Q100 59 112 64" stroke="#1a0000" strokeWidth={2} fill="none" strokeLinecap="round" opacity={0.6}/>
+    </svg>
+  );
+}
+
+function OctopusSVG({size=130,isHurt=false}){
+  return(
+    <svg viewBox="0 0 200 220" width={size} height={size*1.1} className={isHurt?"anim-shake":"anim-boss"}
+      style={{transformOrigin:"50% 60%",overflow:"visible"}}>
+      {/* 8条触手 */}
+      {[0,1,2,3,4,5,6,7].map(i=>{
+        const a=(i/8)*Math.PI*2;
+        const bx=100+Math.cos(a)*55;
+        const by=120+Math.sin(a)*40;
+        const ex=100+Math.cos(a)*110;
+        const ey=130+Math.sin(a)*80;
+        return <path key={i} d={`M${bx} ${by} Q${ex-10} ${ey-20} ${ex} ${ey}`} stroke="#4a0080" strokeWidth={12} fill="none" strokeLinecap="round" opacity={0.85}/>;
+      })}
+      {/* 身体 */}
+      <ellipse cx={100} cy={100} rx={65} ry={75} fill="#6600aa"/>
+      <ellipse cx={100} cy={90} rx={55} ry={62} fill="#8800cc"/>
+      {/* 斑点纹路 */}
+      {[[80,70],[120,70],[65,95],[135,95],[80,115],[120,115]].map(([x,y],i)=>(
+        <circle key={i} cx={x} cy={y} r={6} fill="#aa00ff" opacity={0.5}/>
+      ))}
+      {/* 巨眼 */}
+      <circle cx={78} cy={88} r={20} fill="white"/>
+      <circle cx={122} cy={88} r={20} fill="white"/>
+      <circle cx={80} cy={90} r={14} fill="#ffaa00"/>
+      <circle cx={124} cy={90} r={14} fill="#ffaa00"/>
+      <circle cx={82} cy={91} r={8} fill="#1a0030"/>
+      <circle cx={126} cy={91} r={8} fill="#1a0030"/>
+      <circle cx={84} cy={88} r={3} fill="white"/>
+      <circle cx={128} cy={88} r={3} fill="white"/>
+      {/* 嘴 */}
+      <path d="M82 112 Q100 122 118 112" stroke="#1a0030" strokeWidth={4} fill="none" strokeLinecap="round"/>
+      {/* 触手吸盘 */}
+      {[0,1,2,3,4,5,6,7].map(i=>{
+        const a=(i/8)*Math.PI*2;
+        const ex=100+Math.cos(a)*95;
+        const ey=130+Math.sin(a)*72;
+        return <circle key={i} cx={ex} cy={ey} r={4} fill="#aa00ff" opacity={0.7}/>;
+      })}
+    </svg>
+  );
+}
+
+function DragonKingSVG({size=150,isHurt=false}){
+  return(
+    <svg viewBox="0 0 200 300" width={size} height={size*1.5} className={isHurt?"anim-shake":"anim-boss"}
+      style={{transformOrigin:"50% 60%",overflow:"visible"}}>
+      <ellipse cx="100" cy="290" rx="45" ry="10" fill="rgba(0,0,0,0.3)"/>
+      {/* 龙尾 */}
+      <path d="M130 200 Q175 180 178 155 Q180 130 162 118" stroke="#0a4a2a" strokeWidth={12} fill="none" strokeLinecap="round"/>
+      <path d="M162 118 Q155 105 165 98" stroke="#0a4a2a" strokeWidth={8} fill="none" strokeLinecap="round"/>
+      {/* 腿 */}
+      <rect x={58} y={192} width={36} height={78} rx={10} fill="#0a4a2a"/>
+      <rect x={106} y={192} width={36} height={78} rx={10} fill="#0a4a2a"/>
+      {[200,218,236,254].map(y=><><rect key={"ll"+y} x={60} y={y} width={32} height={6} rx={3} fill="#1a8a4a" opacity={0.4}/><rect key={"rl"+y} x={108} y={y} width={32} height={6} rx={3} fill="#1a8a4a" opacity={0.4}/></>)}
+      {/* 龙爪足 */}
+      <ellipse cx={64} cy={276} rx={8} ry={12} fill="#0a4a2a" transform="rotate(-15,64,276)"/>
+      <ellipse cx={78} cy={278} rx={8} ry={13} fill="#0a4a2a"/>
+      <ellipse cx={92} cy={276} rx={8} ry={12} fill="#0a4a2a" transform="rotate(15,92,276)"/>
+      <ellipse cx={110} cy={276} rx={8} ry={12} fill="#0a4a2a" transform="rotate(-15,110,276)"/>
+      <ellipse cx={124} cy={278} rx={8} ry={13} fill="#0a4a2a"/>
+      <ellipse cx={138} cy={276} rx={8} ry={12} fill="#0a4a2a" transform="rotate(15,138,276)"/>
+      {/* 躯干：龙鳞甲 */}
+      <rect x={42} y={92} width={116} height={106} rx={12} fill="#0a4a2a"/>
+      {[104,118,132,146,160,174].map(y=><rect key={y} x={46} y={y} width={108} height={8} rx={4} fill="#1a8a4a" opacity={0.45}/>)}
+      {/* 披风 */}
+      <path d="M42 92 L10 200 Q42 195 42 198 Q42 92 42 92Z" fill="#003388" opacity={0.7}/>
+      <path d="M158 92 L190 200 Q158 195 158 198 Q158 92 158 92Z" fill="#003388" opacity={0.7}/>
+      {/* 护肩：龙头雕 */}
+      <rect x={2} y={88} width={46} height={24} rx={9} fill="#FFD700"/>
+      <rect x={152} y={88} width={46} height={24} rx={9} fill="#FFD700"/>
+      {/* 手臂 */}
+      <rect x={6} y={98} width={40} height={82} rx={9} fill="#0a4a2a"/>
+      <rect x={154} y={98} width={40} height={82} rx={9} fill="#0a4a2a"/>
+      {[110,126,142,158].map(y=><><rect key={"la"+y} x={8} y={y} width={36} height={6} rx={3} fill="#1a8a4a" opacity={0.4}/><rect key={"ra"+y} x={156} y={y} width={36} height={6} rx={3} fill="#1a8a4a" opacity={0.4}/></>)}
+      {/* 三叉戟 */}
+      <rect x={170} y={60} width={8} height={130} rx={3} fill="#FFD700"/>
+      <path d="M162 72 L174 60 L186 72" fill="none" stroke="#FFD700" strokeWidth={4} strokeLinecap="round"/>
+      <line x1={174} y1={60} x2={174} y2={82} stroke="#FFD700" strokeWidth={6}/>
+      {/* 头 */}
+      <circle cx={54} cy={48} r={16} fill="#0a4a2a"/>
+      <circle cx={146} cy={48} r={16} fill="#0a4a2a"/>
+      <circle cx={100} cy={52} r={48} fill="#0a4a2a"/>
+      <circle cx={54} cy={48} r={10} fill="#1a8a4a"/>
+      <circle cx={146} cy={48} r={10} fill="#1a8a4a"/>
+      <ellipse cx={100} cy={64} rx={28} ry={22} fill="#1a8a4a" opacity={0.4}/>
+      {/* 龙王金冠 */}
+      <rect x={58} y={12} width={84} height={18} rx={5} fill="#FFD700"/>
+      {[64,78,92,106,120,134].map(x=><polygon key={x} points={`${x},12 ${x+7},0 ${x+14},12`} fill="#FFD700"/>)}
+      <rect x={58} y={22} width={84} height={8} rx={3} fill="#FF8C00"/>
+      {/* 龙角 */}
+      <path d="M72 18 Q58 0 48 -8" stroke="#1a8a4a" strokeWidth={8} fill="none" strokeLinecap="round"/>
+      <path d="M128 18 Q142 0 152 -8" stroke="#1a8a4a" strokeWidth={8} fill="none" strokeLinecap="round"/>
+      {/* 眉骨 */}
+      <path d="M68 42 Q100 32 132 42" stroke="#0a4a2a" strokeWidth={9} fill="none" strokeLinecap="round"/>
+      {/* 眼（龙眼：竖瞳）*/}
+      <circle cx={82} cy={52} r={10} fill="#ffcc00"/>
+      <circle cx={118} cy={52} r={10} fill="#ffcc00"/>
+      <ellipse cx={82} cy={52} rx={4} ry={8} fill="#1a0000"/>
+      <ellipse cx={118} cy={52} rx={4} ry={8} fill="#1a0000"/>
+      <circle cx={82} cy={48} r={2} fill="white"/>
+      <circle cx={118} cy={48} r={2} fill="white"/>
+      {/* 龙须 */}
+      <path d="M62 68 Q42 74 30 82" stroke="#1a8a4a" strokeWidth={3} fill="none" strokeLinecap="round"/>
+      <path d="M138 68 Q158 74 170 82" stroke="#1a8a4a" strokeWidth={3} fill="none" strokeLinecap="round"/>
+      {/* 嘴 */}
+      <ellipse cx={100} cy={74} rx={14} ry={10} fill="#1a8a4a"/>
+      <path d="M88 80 Q100 86 112 80" stroke="#0a3a1a" strokeWidth={2.5} fill="none" strokeLinecap="round"/>
+    </svg>
+  );
+}
+
+function NineHeadsSVG({size=150,isHurt=false}){
+  const headPositions=[
+    [100,20],[60,15],[140,15],[32,35],[168,35],[20,60],[180,60],[40,85],[160,85]
+  ];
+  return(
+    <svg viewBox="0 0 200 280" width={size} height={size*1.4} className={isHurt?"anim-shake":"anim-boss"}
+      style={{transformOrigin:"50% 70%",overflow:"visible"}}>
+      <ellipse cx="100" cy="273" rx="42" ry="9" fill="rgba(0,0,0,0.3)"/>
+      {/* 9条蛇颈从主体延伸 */}
+      {headPositions.map(([hx,hy],i)=>(
+        <path key={i} d={`M100 100 Q${(100+hx)/2} ${(100+hy)/2-20} ${hx} ${hy+18}`}
+          stroke="#4a0a0a" strokeWidth={i===0?14:10} fill="none" strokeLinecap="round"/>
+      ))}
+      {/* 腿 */}
+      <rect x={62} y={180} width={30} height={75} rx={8} fill="#4a0a0a"/>
+      <rect x={108} y={180} width={30} height={75} rx={8} fill="#4a0a0a"/>
+      <rect x={55} y={248} width={42} height={18} rx={8} fill="#2a0505"/>
+      <rect x={103} y={248} width={42} height={18} rx={8} fill="#2a0505"/>
+      {/* 主体 */}
+      <ellipse cx={100} cy={128} rx={58} ry={65} fill="#6a0a0a"/>
+      <ellipse cx={100} cy={122} rx={48} ry={54} fill="#8a1010"/>
+      {[106,122,138].map(y=><rect key={y} x={58} y={y} width={84} height={8} rx={4} fill="#aa2020" opacity={0.4}/>)}
+      {/* 手臂 */}
+      <rect x={8} y={95} width={42} height={75} rx={9} fill="#6a0a0a"/>
+      <rect x={150} y={95} width={42} height={75} rx={9} fill="#6a0a0a"/>
+      <circle cx={29} cy={175} r={13} fill="#6a0a0a"/>
+      <circle cx={171} cy={175} r={13} fill="#6a0a0a"/>
+      {/* 9个头 */}
+      {headPositions.map(([hx,hy],i)=>(
+        <g key={i}>
+          <circle cx={hx} cy={hy} r={i===0?16:13} fill="#8a1010"/>
+          <ellipse cx={hx} cy={hy+4} rx={i===0?11:9} ry={i===0?9:7} fill="#aa2020" opacity={0.6}/>
+          <circle cx={hx-5} cy={hy-3} r={i===0?4:3} fill="#ff2200"/>
+          <circle cx={hx+5} cy={hy-3} r={i===0?4:3} fill="#ff2200"/>
+          <circle cx={hx-5} cy={hy-3} r={i===0?2:1.5} fill="#ff8888"/>
+          <circle cx={hx+5} cy={hy-3} r={i===0?2:1.5} fill="#ff8888"/>
+          {i===0&&<><path d="M92 24 Q100 28 108 24" stroke="#2a0505" strokeWidth={2} fill="none"/><path d="M92 20 Q95 16 100 15 Q105 16 108 20" fill="#ff2200" opacity={0.8}/></>}
+        </g>
+      ))}
+    </svg>
+  );
+}
+
+function BullDemonSVG({size=150,isHurt=false}){
+  return(
+    <svg viewBox="0 0 200 300" width={size} height={size*1.5} className={isHurt?"anim-shake":"anim-idle"}
+      style={{transformOrigin:"50% 85%",overflow:"visible"}}>
+      <ellipse cx="100" cy="290" rx="48" ry="11" fill="rgba(0,0,0,0.3)"/>
+      {/* 腿（粗壮）*/}
+      <rect x={54} y={190} width={40} height={82} rx={10} fill="#4a1a00"/>
+      <rect x={106} y={190} width={40} height={82} rx={10} fill="#4a1a00"/>
+      <rect x={48} y={260} width={50} height={22} rx={10} fill="#1a0800"/>
+      <rect x={102} y={260} width={50} height={22} rx={10} fill="#1a0800"/>
+      {/* 主体（超宽）*/}
+      <rect x={28} y={85} width={144} height={112} rx={14} fill="#4a1a00"/>
+      {[100,118,136,154].map(y=><rect key={y} x={34} y={y} width={132} height={8} rx={4} fill="#6a2a00" opacity={0.5}/>)}
+      <rect x={28} y={175} width={144} height={16} rx={5} fill="rgba(0,0,0,0.3)"/>
+      {/* 手臂（粗大）*/}
+      <rect x={-5} y={90} width={40} height={90} rx={10} fill="#4a1a00"/>
+      <rect x={165} y={90} width={40} height={90} rx={10} fill="#4a1a00"/>
+      <circle cx={15} cy={185} r={16} fill="#4a1a00"/>
+      <circle cx={185} cy={185} r={16} fill="#4a1a00"/>
+      {/* 头 */}
+      <rect x={44} y={12} width={112} height={78} rx={16} fill="#4a1a00"/>
+      <circle cx={44} cy={50} r={18} fill="#4a1a00"/>
+      <circle cx={156} cy={50} r={18} fill="#4a1a00"/>
+      <ellipse cx={100} cy={58} rx={32} ry={24} fill="#6a2a00" opacity={0.5}/>
+      {/* 牛角（标志性）*/}
+      <path d="M60 20 Q30 -10 15 5" stroke="#1a0800" strokeWidth={12} fill="none" strokeLinecap="round"/>
+      <path d="M140 20 Q170 -10 185 5" stroke="#1a0800" strokeWidth={12} fill="none" strokeLinecap="round"/>
+      <path d="M60 20 Q30 -10 15 5" stroke="#2a1000" strokeWidth={8} fill="none" strokeLinecap="round"/>
+      <path d="M140 20 Q170 -10 185 5" stroke="#2a1000" strokeWidth={8} fill="none" strokeLinecap="round"/>
+      {/* 头带 */}
+      <rect x={44} y={22} width={112} height={14} rx={5} fill="#cc0000"/>
+      {/* 眉骨（愤怒）*/}
+      <path d="M62 44 Q100 34 138 44" stroke="#4a1a00" strokeWidth={10} fill="none" strokeLinecap="round"/>
+      <path d="M66 44 Q80 39 88 44" stroke="#880000" strokeWidth={3} fill="none" strokeLinecap="round"/>
+      <path d="M112 44 Q120 39 134 44" stroke="#880000" strokeWidth={3} fill="none" strokeLinecap="round"/>
+      {/* 眼（红牛眼）*/}
+      <circle cx={80} cy={52} r={11} fill="#cc2200"/>
+      <circle cx={120} cy={52} r={11} fill="#cc2200"/>
+      <circle cx={81} cy={53} r={7} fill="#880000"/>
+      <circle cx={121} cy={53} r={7} fill="#880000"/>
+      <circle cx={83} cy={50} r={2.5} fill="rgba(255,255,255,0.6)"/>
+      <circle cx={123} cy={50} r={2.5} fill="rgba(255,255,255,0.6)"/>
+      {/* 牛鼻 */}
+      <ellipse cx={100} cy={72} rx={18} ry={12} fill="#6a2a00"/>
+      <circle cx={93} cy={70} r={5} fill="#2a0800"/>
+      <circle cx={107} cy={70} r={5} fill="#2a0800"/>
+      <path d="M85 80 Q100 86 115 80" stroke="#2a0800" strokeWidth={3} fill="none" strokeLinecap="round"/>
+    </svg>
+  );
+}
+
+function IronFanSVG({size=130,isHurt=false}){
+  return(
+    <svg viewBox="0 0 200 280" width={size} height={size*1.4} className={isHurt?"anim-shake":"anim-idle"}
+      style={{transformOrigin:"50% 85%",overflow:"visible"}}>
+      <ellipse cx="100" cy="273" rx="38" ry="9" fill="rgba(0,0,0,0.25)"/>
+      {/* 巨型铁扇（主武器）*/}
+      <path d="M80 95 Q30 40 40 10 Q100 5 160 10 Q170 40 120 95Z" fill="#1a5a00" stroke="#2a8a00" strokeWidth={2}/>
+      {/* 扇骨 */}
+      {[0,1,2,3,4,5,6].map(i=>{
+        const a=-60+i*20;const r=a*Math.PI/180;
+        return <line key={i} x1={100} y1={95} x2={100+Math.cos(r)*80} y2={50+Math.sin(r)*60}
+          stroke="#4aaa00" strokeWidth={2} opacity={0.7}/>;
+      })}
+      {/* 扇面装饰 */}
+      <ellipse cx={100} cy={52} rx={45} ry={32} fill="#2a8a00" opacity={0.4}/>
+      <text x={100} y={58} textAnchor="middle" fontSize={22} fill="#88ff00" opacity={0.8}>芭</text>
+      {/* 腿 */}
+      <rect x={68} y={188} width={26} height={68} rx={7} fill="#8B1a4a"/>
+      <rect x={106} y={188} width={26} height={68} rx={7} fill="#8B1a4a"/>
+      <rect x={62} y={250} width={38} height={16} rx={7} fill="#3a0a1a"/>
+      <rect x={100} y={250} width={38} height={16} rx={7} fill="#3a0a1a"/>
+      {/* 裙摆 */}
+      <path d="M38 165 Q100 185 162 165 L168 188 Q100 210 32 188Z" fill="#cc2266" opacity={0.9}/>
+      {/* 躯干 */}
+      <rect x={50} y={98} width={100} height={82} rx={10} fill="#cc2266"/>
+      {[112,128,144].map(y=><rect key={y} x={56} y={y} width={88} height={5} rx={2} fill="#ff6688" opacity={0.4}/>)}
+      {/* 手臂 */}
+      <rect x={20} y={102} width={32} height={68} rx={8} fill="#8B1a4a"/>
+      <rect x={148} y={102} width={32} height={68} rx={8} fill="#8B1a4a"/>
+      <circle cx={36} cy={174} r={10} fill="#8B1a4a"/>
+      <circle cx={164} cy={174} r={10} fill="#8B1a4a"/>
+      {/* 头 */}
+      <circle cx={42} cy={50} r={14} fill="#c8724a"/>
+      <circle cx={158} cy={50} r={14} fill="#c8724a"/>
+      <circle cx={100} cy={54} r={44} fill="#c8724a"/>
+      <ellipse cx={100} cy={66} rx={26} ry={20} fill="#e8a070" opacity={0.5}/>
+      {/* 发饰 */}
+      <ellipse cx={100} cy={22} rx={30} ry={18} fill="#1a0a00"/>
+      <circle cx={100} cy={12} r={8} fill="#FFD700"/>
+      <circle cx={78} cy={20} r={5} fill="#FFD700"/>
+      <circle cx={122} cy={20} r={5} fill="#FFD700"/>
+      {/* 眉骨 */}
+      <path d="M72 46 Q100 36 128 46" stroke="#c8724a" strokeWidth={8} fill="none" strokeLinecap="round"/>
+      {/* 优雅弯眉 */}
+      <path d="M73 44 Q84 38 94 44" stroke="#880044" strokeWidth={2.5} fill="none" strokeLinecap="round"/>
+      <path d="M106 44 Q116 38 127 44" stroke="#880044" strokeWidth={2.5} fill="none" strokeLinecap="round"/>
+      {/* 眼 */}
+      <circle cx={82} cy={52} r={9} fill="white"/>
+      <circle cx={118} cy={52} r={9} fill="white"/>
+      <circle cx={83} cy={53} r={6} fill="#1a0a2e"/>
+      <circle cx={119} cy={53} r={6} fill="#1a0a2e"/>
+      <circle cx={85} cy={51} r={2.2} fill="white"/>
+      <circle cx={121} cy={51} r={2.2} fill="white"/>
+      {/* 嘴 */}
+      <ellipse cx={100} cy={72} rx={11} ry={8} fill="#e8a070"/>
+      <path d="M91 78 Q100 83 109 78" stroke="#8B3a1a" strokeWidth={2} fill="none" strokeLinecap="round"/>
+    </svg>
+  );
+}
+
+function RedBoySVG({size=100,isHurt=false}){
+  return(
+    <svg viewBox="0 0 120 180" width={size} height={size*1.5} className={isHurt?"anim-shake":"anim-idle"}
+      style={{transformOrigin:"50% 85%",overflow:"visible"}}>
+      <ellipse cx="60" cy="174" rx="28" ry="7" fill="rgba(0,0,0,0.25)"/>
+      {/* 火焰环绕 */}
+      {[0,1,2,3,4,5].map(i=>{
+        const a=(i/6)*Math.PI*2;
+        const fx=60+Math.cos(a)*38;const fy=90+Math.sin(a)*30;
+        return <ellipse key={i} cx={fx} cy={fy} rx={8} ry={14} fill="#ff4400"
+          opacity={0.7} transform={`rotate(${i*60} ${fx} ${fy})`}/>;
+      })}
+      {/* 火焰内层 */}
+      {[0,1,2,3].map(i=>{
+        const a=(i/4)*Math.PI*2+0.4;
+        const fx=60+Math.cos(a)*25;const fy=90+Math.sin(a)*20;
+        return <ellipse key={i} cx={fx} cy={fy} rx={6} ry={10} fill="#ff8800" opacity={0.6}/>;
+      })}
+      {/* 腿 */}
+      <rect x={38} y={118} width={20} height={44} rx={6} fill="#cc0000"/>
+      <rect x={62} y={118} width={20} height={44} rx={6} fill="#cc0000"/>
+      <rect x={32} y={155} width={28} height={14} rx={6} fill="#880000"/>
+      <rect x={60} y={155} width={28} height={14} rx={6} fill="#880000"/>
+      {/* 躯干 */}
+      <rect x={28} y={56} width={64} height={66} rx={9} fill="#cc0000"/>
+      {[70,84,98].map(y=><rect key={y} x={32} y={y} width={56} height={5} rx={2} fill="#ff4400" opacity={0.5}/>)}
+      {/* 火焰槊（武器）*/}
+      <rect x={100} y={30} width={6} height={110} rx={3} fill="#FFD700"/>
+      <path d="M94 42 Q103 30 112 42 Q103 50 94 42Z" fill="#ff4400"/>
+      <path d="M94 38 Q103 26 112 38 Q103 46 94 38Z" fill="#ff8800"/>
+      {/* 手臂 */}
+      <rect x={8} y={60} width={22} height={52} rx={7} fill="#cc0000"/>
+      <rect x={90} y={60} width={22} height={52} rx={7} fill="#cc0000"/>
+      <circle cx={19} cy={116} r={8} fill="#cc0000"/>
+      <circle cx={101} cy={116} r={8} fill="#cc0000"/>
+      {/* 头 */}
+      <circle cx={34} cy={28} r={11} fill="#c8724a"/>
+      <circle cx={86} cy={28} r={11} fill="#c8724a"/>
+      <circle cx={60} cy={30} r={28} fill="#c8724a"/>
+      <ellipse cx={60} cy={40} rx={18} ry={14} fill="#e8a070" opacity={0.5}/>
+      {/* 发髻（小孩发型）*/}
+      <circle cx={42} cy={14} r={10} fill="#1a0a00"/>
+      <circle cx={78} cy={14} r={10} fill="#1a0a00"/>
+      {/* 眉骨 */}
+      <path d="M44 26 Q60 19 76 26" stroke="#c8724a" strokeWidth={7} fill="none" strokeLinecap="round"/>
+      {/* 眼 */}
+      <circle cx={52} cy={30} r={7} fill="white"/>
+      <circle cx={68} cy={30} r={7} fill="white"/>
+      <circle cx={53} cy={31} r={5} fill="#ff2200"/>
+      <circle cx={69} cy={31} r={5} fill="#ff2200"/>
+      <circle cx={54} cy={29} r={2} fill="white"/>
+      <circle cx={70} cy={29} r={2} fill="white"/>
+      {/* 嘴 */}
+      <ellipse cx={60} cy={44} rx={9} ry={6} fill="#e8a070"/>
+      <path d="M52 49 Q60 53 68 49" stroke="#8B3a1a" strokeWidth={2} fill="none" strokeLinecap="round"/>
+    </svg>
+  );
+}
+
+function HeavenGuardSVG({size=130,isHurt=false}){
+  return(
+    <svg viewBox="0 0 200 300" width={size} height={size*1.5} className={isHurt?"anim-shake":"anim-idle"}
+      style={{transformOrigin:"50% 85%",overflow:"visible"}}>
+      <ellipse cx="100" cy="290" rx="42" ry="9" fill="rgba(0,0,0,0.3)"/>
+      {/* 腿 */}
+      <rect x={60} y={192} width={34} height={76} rx={8} fill="#2244aa"/>
+      <rect x={106} y={192} width={34} height={76} rx={8} fill="#2244aa"/>
+      <rect x={54} y={256} width={44} height={20} rx={9} fill="#FFD700"/>
+      <rect x={102} y={256} width={44} height={20} rx={9} fill="#FFD700"/>
+      {/* 躯干 */}
+      <rect x={42} y={90} width={116} height={108} rx={12} fill="#2244aa"/>
+      {[106,122,138,154,168].map(y=><rect key={y} x={48} y={y} width={104} height={7} rx={3} fill="#4466cc" opacity={0.5}/>)}
+      {/* 胸甲 */}
+      <rect x={52} y={92} width={96} height={54} rx={8} fill="#FFD700" opacity={0.9}/>
+      <circle cx={100} cy={120} r={14} fill="#FF8C00"/>
+      <circle cx={100} cy={120} r={9} fill="#FFD700"/>
+      {/* 手臂 */}
+      <rect x={8} y={96} width={38} height={80} rx={9} fill="#2244aa"/>
+      <rect x={154} y={96} width={38} height={80} rx={9} fill="#2244aa"/>
+      <circle cx={27} cy={180} r={12} fill="#2244aa"/>
+      <circle cx={173} cy={180} r={12} fill="#2244aa"/>
+      {/* 天戟 */}
+      <rect x={165} y={50} width={8} height={140} rx={3} fill="#888"/>
+      <path d="M158 62 L169 48 L180 62" fill="none" stroke="#FFD700" strokeWidth={4} strokeLinecap="round"/>
+      <line x1={169} y1={48} x2={169} y2={72} stroke="#FFD700" strokeWidth={6}/>
+      {/* 头 */}
+      <circle cx={48} cy={46} r={16} fill="#2244aa"/>
+      <circle cx={152} cy={46} r={16} fill="#2244aa"/>
+      <circle cx={100} cy={52} r={46} fill="#2244aa"/>
+      {/* 头盔 */}
+      <rect x={56} y={14} width={88} height={42} rx={8} fill="#FFD700"/>
+      <ellipse cx={100} cy={14} rx={44} ry={14} fill="#FFD700"/>
+      <rect x={56} y={36} width={88} height={12} rx={4} fill="#FF8C00"/>
+      <circle cx={100} cy={8} r={9} fill="#FF4400"/>
+      <circle cx={100} cy={8} r={5} fill="#FFD700"/>
+      {/* 面甲护耳 */}
+      <rect x={50} y={50} width={16} height={28} rx={5} fill="#FFD700"/>
+      <rect x={134} y={50} width={16} height={28} rx={5} fill="#FFD700"/>
+      {/* 眼（头盔缝隙）*/}
+      <circle cx={82} cy={54} r={7} fill="#88aaff"/>
+      <circle cx={118} cy={54} r={7} fill="#88aaff"/>
+      <circle cx={83} cy={55} r={4.5} fill="#2244aa"/>
+      <circle cx={119} cy={55} r={4.5} fill="#2244aa"/>
+      <circle cx={84} cy={53} r={1.5} fill="white"/>
+      <circle cx={120} cy={53} r={1.5} fill="white"/>
+    </svg>
+  );
+}
+
+function HeavenGeneralSVG({size=150,isHurt=false}){
+  return(
+    <svg viewBox="0 0 200 300" width={size} height={size*1.5} className={isHurt?"anim-shake":"anim-boss"}
+      style={{transformOrigin:"50% 85%",overflow:"visible"}}>
+      <ellipse cx="100" cy="290" rx="46" ry="11" fill="rgba(0,0,0,0.3)"/>
+      {/* 腿 */}
+      <rect x={56} y={192} width={38} height={78} rx={10} fill="#003388"/>
+      <rect x={106} y={192} width={38} height={78} rx={10} fill="#003388"/>
+      <rect x={50} y={258} width={48} height={22} rx={10} fill="#FFD700"/>
+      <rect x={102} y={258} width={48} height={22} rx={10} fill="#FFD700"/>
+      {/* 披风 */}
+      <path d="M38 90 L5 210 Q38 205 38 208 Q38 90 38 90Z" fill="#cc0000" opacity={0.8}/>
+      <path d="M162 90 L195 210 Q162 205 162 208 Q162 90 162 90Z" fill="#cc0000" opacity={0.8}/>
+      {/* 躯干 */}
+      <rect x={38} y={88} width={124} height={112} rx={13} fill="#003388"/>
+      {[104,120,136,152,166].map(y=><rect key={y} x={44} y={y} width={112} height={7} rx={3} fill="#2255bb" opacity={0.5}/>)}
+      {/* 华丽胸甲 */}
+      <rect x={46} y={90} width={108} height={60} rx={9} fill="#FFD700"/>
+      {/* 胸甲纹路 */}
+      <path d="M54 120 Q100 105 146 120" stroke="#FF8C00" strokeWidth={3} fill="none"/>
+      <circle cx={100} cy={122} r={16} fill="#FF4400"/>
+      <circle cx={100} cy={122} r={10} fill="#FFD700"/>
+      <circle cx={100} cy={122} r={5} fill="#FF4400"/>
+      {/* 护肩 */}
+      <rect x={2} y={85} width={44} height={26} rx={10} fill="#FFD700"/>
+      <rect x={154} y={85} width={44} height={26} rx={10} fill="#FFD700"/>
+      {/* 手臂 */}
+      <rect x={4} y={98} width={40} height={84} rx={10} fill="#003388"/>
+      <rect x={156} y={98} width={40} height={84} rx={10} fill="#003388"/>
+      <circle cx={24} cy={186} r={14} fill="#003388"/>
+      <circle cx={176} cy={186} r={14} fill="#003388"/>
+      {/* 大戟 */}
+      <rect x={166} y={40} width={9} height={150} rx={4} fill="#aaaaaa"/>
+      <path d="M157 52 L171 36 L185 52 Q171 62 157 52Z" fill="#FFD700"/>
+      <line x1={171} y1={36} x2={171} y2={60} stroke="#FFD700" strokeWidth={7}/>
+      {/* 光晕 */}
+      <circle cx={100} cy={50} r={50} fill="none" stroke="rgba(255,215,0,0.15)" strokeWidth={8}/>
+      {/* 头 */}
+      <circle cx={46} cy={44} r={18} fill="#003388"/>
+      <circle cx={154} cy={44} r={18} fill="#003388"/>
+      <circle cx={100} cy={50} r={50} fill="#003388"/>
+      {/* 将帅盔 */}
+      <ellipse cx={100} cy={18} rx={50} ry={20} fill="#FFD700"/>
+      <rect x={52} y={18} width={96} height={38} rx={8} fill="#FFD700"/>
+      <rect x={52} y={36} width={96} height={14} rx={5} fill="#FF8C00"/>
+      {/* 帅盔翎毛 */}
+      <path d="M100 0 Q88 -25 80 -40" stroke="#cc0000" strokeWidth={5} fill="none" strokeLinecap="round"/>
+      <path d="M100 0 Q112 -25 120 -40" stroke="#cc0000" strokeWidth={5} fill="none" strokeLinecap="round"/>
+      <circle cx={80} cy={-40} r={5} fill="#cc0000"/>
+      <circle cx={120} cy={-40} r={5} fill="#cc0000"/>
+      {/* 护耳 */}
+      <rect x={46} y={48} width={18} height={30} rx={6} fill="#FFD700"/>
+      <rect x={136} y={48} width={18} height={30} rx={6} fill="#FFD700"/>
+      {/* 眼 */}
+      <circle cx={82} cy={54} r={9} fill="#88aaff"/>
+      <circle cx={118} cy={54} r={9} fill="#88aaff"/>
+      <circle cx={83} cy={55} r={6} fill="#003388"/>
+      <circle cx={119} cy={55} r={6} fill="#003388"/>
+      <circle cx={85} cy={52} r={2} fill="white"/>
+      <circle cx={121} cy={52} r={2} fill="white"/>
+    </svg>
+  );
+}
+
+function WhiteBoneSVG({size=160,isHurt=false}){
+  return(
+    <svg viewBox="0 0 200 320" width={size} height={size*1.6} className={isHurt?"anim-shake":"anim-boss"}
+      style={{transformOrigin:"50% 80%",overflow:"visible"}}>
+      <ellipse cx="100" cy="313" rx="44" ry="10" fill="rgba(150,100,200,0.2)"/>
+      {/* 飘荡幽灵裙摆 */}
+      <path d="M30 180 Q20 240 30 280 Q55 310 100 308 Q145 310 170 280 Q180 240 170 180Z"
+        fill="#e8e0f0" opacity={0.85}/>
+      <path d="M30 200 Q15 258 28 295 Q50 315 100 312 Q150 315 172 295 Q185 258 170 200"
+        fill="none" stroke="#c8b8e0" strokeWidth={2}/>
+      {/* 裙摆骨骼纹 */}
+      {[215,245,275].map(y=>(
+        <path key={y} d={`M35 ${y} Q100 ${y+12} 165 ${y}`} stroke="#c8b8e0" strokeWidth={1.5} fill="none" opacity={0.6}/>
+      ))}
+      {/* 骨骼手臂 */}
+      <path d="M50 110 Q20 125 8 145 Q4 160 14 168" stroke="#f0ecf8" strokeWidth={12} fill="none" strokeLinecap="round"/>
+      <path d="M14 168 Q8 182 18 190" stroke="#f0ecf8" strokeWidth={10} fill="none" strokeLinecap="round"/>
+      {/* 左手骨 */}
+      <line x1={8} y1={190} x2={-5} y2={204} stroke="#f0ecf8" strokeWidth={5} strokeLinecap="round"/>
+      <line x1={8} y1={190} x2={6} y2={207} stroke="#f0ecf8" strokeWidth={5} strokeLinecap="round"/>
+      <line x1={8} y1={190} x2={18} y2={206} stroke="#f0ecf8" strokeWidth={5} strokeLinecap="round"/>
+      <path d="M150 110 Q180 125 192 145 Q196 160 186 168" stroke="#f0ecf8" strokeWidth={12} fill="none" strokeLinecap="round"/>
+      <path d="M186 168 Q192 182 182 190" stroke="#f0ecf8" strokeWidth={10} fill="none" strokeLinecap="round"/>
+      <line x1={192} y1={190} x2={205} y2={204} stroke="#f0ecf8" strokeWidth={5} strokeLinecap="round"/>
+      <line x1={192} y1={190} x2={194} y2={207} stroke="#f0ecf8" strokeWidth={5} strokeLinecap="round"/>
+      <line x1={192} y1={190} x2={182} y2={206} stroke="#f0ecf8" strokeWidth={5} strokeLinecap="round"/>
+      {/* 躯干骨架 */}
+      <rect x={62} y={100} width={76} height={92} rx={10} fill="#f0ecf8" opacity={0.9}/>
+      {/* 肋骨 */}
+      {[110,126,142,158].map(y=>(
+        <g key={y}>
+          <path d={`M70 ${y} Q62 ${y+6} 66 ${y+14}`} stroke="#c8b8e0" strokeWidth={3} fill="none" strokeLinecap="round"/>
+          <path d={`M130 ${y} Q138 ${y+6} 134 ${y+14}`} stroke="#c8b8e0" strokeWidth={3} fill="none" strokeLinecap="round"/>
+        </g>
+      ))}
+      {/* 胸骨 */}
+      <rect x={96} y={105} width={8} height={80} rx={3} fill="#c8b8e0"/>
+      {/* 飘带装饰 */}
+      <path d="M62 105 Q30 80 20 55" stroke="#c8b8e0" strokeWidth={6} fill="none" strokeLinecap="round" opacity={0.6}/>
+      <path d="M138 105 Q170 80 180 55" stroke="#c8b8e0" strokeWidth={6} fill="none" strokeLinecap="round" opacity={0.6}/>
+      {/* 幽灵光晕 */}
+      <circle cx={100} cy={56} r={58} fill="rgba(200,150,255,0.1)"/>
+      <circle cx={100} cy={56} r={48} fill="rgba(200,150,255,0.08)"/>
+      {/* 头骨 */}
+      <circle cx={100} cy={56} r={44} fill="#f0ecf8"/>
+      <ellipse cx={100} cy={78} rx={30} ry={20} fill="#e8e0f0"/>
+      {/* 颅缝 */}
+      <path d="M76 34 Q84 28 100 30 Q116 28 124 34" stroke="#c8b8e0" strokeWidth={1.5} fill="none"/>
+      <path d="M100 30 L100 56" stroke="#c8b8e0" strokeWidth={1.5}/>
+      {/* 发饰（白骨夫人标志）*/}
+      <circle cx={100} cy={18} r={12} fill="#c8b8e0" opacity={0.8}/>
+      <path d="M72 28 Q68 12 76 6" stroke="#c8b8e0" strokeWidth={4} fill="none" strokeLinecap="round"/>
+      <path d="M128 28 Q132 12 124 6" stroke="#c8b8e0" strokeWidth={4} fill="none" strokeLinecap="round"/>
+      <circle cx={72} cy={26} r={4} fill="#aa88cc"/>
+      <circle cx={128} cy={26} r={4} fill="#aa88cc"/>
+      {/* 眼窝（空洞）*/}
+      <ellipse cx={82} cy={54} rx={13} ry={14} fill="#2a1a3a"/>
+      <ellipse cx={118} cy={54} rx={13} ry={14} fill="#2a1a3a"/>
+      {/* 鬼火眼 */}
+      <circle cx={82} cy={54} r={8} fill="#6600aa" opacity={0.7}/>
+      <circle cx={118} cy={54} r={8} fill="#6600aa" opacity={0.7}/>
+      <circle cx={82} cy={52} r={4} fill="#cc88ff"/>
+      <circle cx={118} cy={52} r={4} fill="#cc88ff"/>
+      <circle cx={83} cy={50} r={2} fill="white"/>
+      <circle cx={119} cy={50} r={2} fill="white"/>
+      {/* 颧骨 */}
+      <path d="M62 62 Q68 70 74 66" stroke="#c8b8e0" strokeWidth={2} fill="none"/>
+      <path d="M138 62 Q132 70 126 66" stroke="#c8b8e0" strokeWidth={2} fill="none"/>
+      {/* 齿缝嘴 */}
+      <path d="M78 80 Q100 92 122 80" stroke="#2a1a3a" strokeWidth={3} fill="none" strokeLinecap="round"/>
+      {[84,90,96,102,108,114].map(x=>(
+        <line key={x} x1={x} y1={80} x2={x} y2={88} stroke="#2a1a3a" strokeWidth={2}/>
+      ))}
+    </svg>
+  );
+}
+
+function EnemySVG({type,hp,maxHp,isHurt=false,size=130}){
+  if(type==="spider") return <SpiderSVG size={size*0.75} isHurt={isHurt}/>;
+  if(type==="liuer") return <LiuerSVG size={size} isHurt={isHurt}/>;
+  if(type==="octopus") return <OctopusSVG size={size*0.95} isHurt={isHurt}/>;
+  if(type==="dragonking") return <DragonKingSVG size={size} isHurt={isHurt}/>;
+  if(type==="nineheads") return <NineHeadsSVG size={size} isHurt={isHurt}/>;
+  if(type==="bull") return <BullDemonSVG size={size} isHurt={isHurt}/>;
+  if(type==="ironfan") return <IronFanSVG size={size*0.95} isHurt={isHurt}/>;
+  if(type==="redboy") return <RedBoySVG size={size*0.75} isHurt={isHurt}/>;
+  if(type==="heavenguard") return <HeavenGuardSVG size={size*0.95} isHurt={isHurt}/>;
+  if(type==="heavengeneral") return <HeavenGeneralSVG size={size} isHurt={isHurt}/>;
+  if(type==="baigu") return <WhiteBoneSVG size={size*1.1} isHurt={isHurt}/>;
+  return null;
+}
+
+// ══════════════════════════════════════════════════════════
+// 星空背景
+// ══════════════════════════════════════════════════════════
+function StarsBg(){
+  const stars=Array.from({length:55},(_,i)=>({
+    id:i,x:Math.random()*100,y:Math.random()*100,
+    size:Math.random()*2+0.5,delay:Math.random()*4,dur:2+Math.random()*3,
+  }));
+  return(
+    <div className="stars-bg">
+      {stars.map(s=>(
+        <div key={s.id} className="star" style={{
+          left:`${s.x}%`,top:`${s.y}%`,width:s.size,height:s.size,
+          "--delay":`${s.delay}s`,"--d":`${s.dur}s`,
+          animationDelay:`${s.delay}s`,animationDuration:`${s.dur}s`,
+        }}/>
+      ))}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════
+// HP条组件
+// ══════════════════════════════════════════════════════════
+function HPBar({current,max,isPlayer=false,height=14}){
+  const pct=Math.max(0,current/max)*100;
+  const cls=isPlayer
+    ? "player-hp"
+    : pct<25 ? "critical" : pct<50 ? "low" : "enemy-hp";
+  return(
+    <div className="hp-track" style={{height}}>
+      <div className={`hp-fill ${cls}`} style={{width:`${pct}%`}}/>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════
+// 战斗界面
+// ══════════════════════════════════════════════════════════
+function CombatScreen({level,playerChar,bigBuild,bigCustom,playerHp,setPlayerHp,onVictory,onDefeat,audio}){
+  const [enemies,setEnemies]=useState(()=>level.enemies.map(e=>({...e,currentHp:e.hp})));
+  const [targetIdx,setTargetIdx]=useState(0);
+  const [specialCd,setSpecialCd]=useState(0);
+  const [potions,setPotions]=useState(3);
+  const [log,setLog]=useState([`⚔️ 第${level.id}关开始！消灭所有敌人！`]);
+  const [dmgNums,setDmgNums]=useState([]);
+  const [playerAnim,setPlayerAnim]=useState("anim-idle");
+  const [hurtEnemyId,setHurtEnemyId]=useState(null);
+  const [playerHurt,setPlayerHurt]=useState(false);
+  const [phase,setPhase]=useState("fighting"); // fighting | won | lost
+  const enemyTimerRef=useRef(null);
+  const cdTimerRef=useRef(null);
+  const logRef=useRef(null);
+  const dmgIdRef=useRef(0);
+
+  const addLog=(msg)=>setLog(l=>[msg,...l].slice(0,8));
+  const addDmg=(x,y,val,color="#ff4444")=>{
+    const id=dmgIdRef.current++;
+    setDmgNums(d=>[...d,{id,x,y,val,color}]);
+    setTimeout(()=>setDmgNums(d=>d.filter(n=>n.id!==id)),950);
+  };
+
+  // Auto-scroll log
+  useEffect(()=>{if(logRef.current)logRef.current.scrollTop=0;},[log]);
+
+  // Ensure valid target
+  useEffect(()=>{
+    const alive=enemies.findIndex(e=>e.currentHp>0);
+    if(alive>=0&&enemies[targetIdx]?.currentHp<=0)setTargetIdx(alive);
+  },[enemies,targetIdx]);
+
+  // Special cooldown countdown
+  useEffect(()=>{
+    if(specialCd<=0)return;
+    cdTimerRef.current=setTimeout(()=>setSpecialCd(c=>Math.max(0,c-1)),1000);
+    return()=>clearTimeout(cdTimerRef.current);
+  },[specialCd]);
+
+  // Enemy attack timer
+  useEffect(()=>{
+    if(phase!=="fighting")return;
+    enemyTimerRef.current=setInterval(()=>{
+      const aliveEnemies=enemies.filter(e=>e.currentHp>0);
+      if(aliveEnemies.length===0)return;
+      const attacker=aliveEnemies[Math.floor(Math.random()*aliveEnemies.length)];
+      const dmg=attacker.atk[0]+Math.floor(Math.random()*(attacker.atk[1]-attacker.atk[0]+1));
+      setPlayerHp(hp=>{
+        const newHp=Math.max(0,hp-dmg);
+        if(newHp<=0)setPhase("lost");
+        return newHp;
+      });
+      setPlayerHurt(true);
+      setTimeout(()=>setPlayerHurt(false),450);
+      audio.playHitSound();
+      addLog(`💥 ${attacker.name}攻击你，造成${dmg}点伤害！`);
+      addDmg(30,60,`-${dmg}`,"#ff4444");
+    },3000);
+    return()=>clearInterval(enemyTimerRef.current);
+  },[phase,enemies]);
+
+  // Check win
+  useEffect(()=>{
+    if(phase==="fighting"&&enemies.every(e=>e.currentHp<=0)){
+      setPhase("won");
+      clearInterval(enemyTimerRef.current);
+      audio.playLevelClearSound();
+    }
+  },[enemies,phase]);
+
+  // Check lose
+  useEffect(()=>{
+    if(phase==="lost"){
+      clearInterval(enemyTimerRef.current);
+      setTimeout(()=>onDefeat(),1800);
+    }
+  },[phase]);
+
+  const doAttack=(dmg,skillName)=>{
+    const tgt=enemies[targetIdx];
+    if(!tgt||tgt.currentHp<=0)return;
+    setEnemies(es=>es.map((e,i)=>i===targetIdx?{...e,currentHp:Math.max(0,e.currentHp-dmg)}:e));
+    setHurtEnemyId(tgt.id);
+    setTimeout(()=>setHurtEnemyId(null),450);
+    audio.playHitSound();
+    addLog(`⚡ ${skillName}命中${tgt.name}，造成${dmg}点伤害！`);
+    addDmg(160,80,`-${dmg}`,"#FFD700");
+    setPlayerAnim("anim-lunge");
+    setTimeout(()=>setPlayerAnim("anim-idle"),400);
+  };
+
+  const normalAttack=()=>{
+    const dmg=80+Math.floor(Math.random()*41);
+    doAttack(dmg,"普通攻击");
+  };
+
+  const specialAttack=()=>{
+    if(specialCd>0)return;
+    const dmg=220+Math.floor(Math.random()*81);
+    doAttack(dmg,"棒法绝招");
+    setSpecialCd(8);
+  };
+
+  const usePotion=()=>{
+    if(potions<=0)return;
+    const heal=200;
+    setPlayerHp(hp=>Math.min(1000,hp+heal));
+    setPotions(p=>p-1);
+    audio.playHealSound();
+    addLog(`💚 使用仙丹，恢复${heal}点生命！`);
+    addDmg(30,60,`+${heal}`,"#4ade80");
+    setPlayerAnim("anim-flashGreen");
+    setTimeout(()=>setPlayerAnim("anim-idle"),400);
+  };
+
+  return(
+    <div style={{width:"100%",maxWidth:860,display:"flex",flexDirection:"column",gap:10,
+      animation:"levelInSlide .5s ease-out"}}>
+      {/* 关卡标题 */}
+      <div style={{textAlign:"center"}}>
+        <div style={{color:"rgba(255,215,0,.6)",fontSize:".78rem",fontWeight:900,letterSpacing:".1em"}}>{level.subtitle}</div>
+        <div style={{fontFamily:"'Noto Sans SC',sans-serif",fontWeight:900,fontSize:"1.3rem",color:"white"}}>{level.name}</div>
+      </div>
+
+      {/* HP 总览 */}
+      <div className="panel" style={{padding:"10px 16px",display:"grid",gridTemplateColumns:"1fr 2fr",gap:12}}>
+        <div>
+          <div style={{fontSize:".72rem",fontWeight:900,color:playerHp<250?"#ff4444":"#4ade80",marginBottom:4}}>
+            {playerChar==="small"?"小猴子":"孙悟空"} HP: {Math.max(0,playerHp)}/1000
+          </div>
+          <HPBar current={playerHp} max={1000} isPlayer height={16}/>
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:4}}>
+          {enemies.map(e=>(
+            <div key={e.id} style={{display:"grid",gridTemplateColumns:"110px 1fr",gap:6,alignItems:"center",
+              opacity:e.currentHp<=0?.35:1}}>
+              <div style={{fontSize:".68rem",fontWeight:900,color:"rgba(255,255,255,.7)",
+                whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+                {e.currentHp<=0?"💀 ":""}{e.name}: {Math.max(0,e.currentHp)}
+              </div>
+              <HPBar current={e.currentHp} max={e.maxHp} height={12}/>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 战斗舞台 */}
+      <div className="combat-arena" style={{background:level.bg,padding:16,
+        display:"flex",alignItems:"flex-end",justifyContent:"space-between",gap:8,minHeight:280}}>
+        <div className="stage-spotlight"/><div className="stage-floor"/>
+
+        {/* 玩家角色 */}
+        <div style={{position:"relative",zIndex:2,display:"flex",flexDirection:"column",alignItems:"center",flexShrink:0}}>
+          {playerChar==="small"
+            ?<SmallMonkeySVG animClass={playerHurt?"anim-shake":playerAnim} size={42}/>
+            :<CharacterSVG build={bigBuild} customization={bigCustom}
+                animClass={playerHurt?"anim-shake":playerAnim} size={160}/>}
+          <div style={{fontSize:".68rem",fontWeight:900,color:"rgba(255,215,0,.7)",marginTop:4}}>
+            {playerChar==="small"?"小猴子":"孙悟空"}
+          </div>
+          {/* 伤害/治疗数字 */}
+          {dmgNums.filter(n=>n.x<100).map(n=>(
+            <div key={n.id} className={n.color==="#4ade80"?"heal-num":"dmg-num"}
+              style={{top:n.y,left:n.x,fontSize:"1.4rem",color:n.color}}>{n.val}</div>
+          ))}
+        </div>
+
+        {/* 中间 VS */}
+        <div style={{color:"rgba(255,215,0,.35)",fontFamily:"'Fredoka One',cursive",
+          fontSize:"1.8rem",flexShrink:0,zIndex:2}}>VS</div>
+
+        {/* 敌人 */}
+        <div style={{display:"flex",gap:10,zIndex:2,flexWrap:"wrap",justifyContent:"flex-end",flex:1}}>
+          {enemies.map((e,i)=>(
+            <div key={e.id} className={`enemy-card${i===targetIdx&&e.currentHp>0?" targeted":""}${e.currentHp<=0?" dead":""}`}
+              onClick={()=>e.currentHp>0&&setTargetIdx(i)}
+              style={{minWidth:90,position:"relative"}}>
+              <div style={{fontSize:".62rem",fontWeight:900,color:"rgba(255,215,0,.7)",marginBottom:3,
+                letterSpacing:".04em"}}>{e.name}</div>
+              <EnemySVG type={e.type} hp={e.currentHp} maxHp={e.maxHp}
+                isHurt={hurtEnemyId===e.id} size={110}/>
+              <HPBar current={e.currentHp} max={e.maxHp} height={10}/>
+              {e.currentHp<=0&&<div style={{position:"absolute",top:"50%",left:"50%",
+                transform:"translate(-50%,-50%)",fontSize:"2rem"}}>💀</div>}
+              {i===targetIdx&&e.currentHp>0&&
+                <div style={{position:"absolute",top:-8,left:"50%",transform:"translateX(-50%)",
+                  color:"#FFD700",fontSize:".65rem",fontWeight:900,
+                  background:"rgba(255,215,0,.2)",borderRadius:6,padding:"1px 6px"}}>
+                  ▼ 目标
+                </div>}
+              {/* 敌人伤害数字 */}
+              {dmgNums.filter(n=>n.x>=100).map(n=>(
+                <div key={n.id} className="dmg-num"
+                  style={{top:n.y,right:20,fontSize:"1.4rem",color:n.color}}>{n.val}</div>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 操作按钮 */}
+      <div className="action-row">
+        <button className="brick-btn gold md" onClick={normalAttack} disabled={phase!=="fighting"}>
+          ⚔️ 普通攻击
+        </button>
+        <div style={{position:"relative"}}>
+          <button className="brick-btn red md" onClick={specialAttack}
+            disabled={phase!=="fighting"||specialCd>0}>
+            🌪️ 棒法绝招
+          </button>
+          {specialCd>0&&<div className="cooldown-ring">{specialCd}s</div>}
+        </div>
+        <button className="brick-btn jade md" onClick={usePotion}
+          disabled={phase!=="fighting"||potions<=0}>
+          💚 仙丹 ×{potions}
+        </button>
+      </div>
+
+      {/* 战斗日志 */}
+      <div className="combat-log" ref={logRef}>
+        {log.map((l,i)=><div key={i} style={{marginBottom:2}}>{l}</div>)}
+      </div>
+
+      {/* 关卡胜利 */}
+      {phase==="won"&&(
+        <div style={{textAlign:"center",padding:20}}>
+          <div style={{fontFamily:"'Noto Sans SC',sans-serif",fontWeight:900,fontSize:"1.6rem",
+            color:"#FFD700",animation:"victoryBounce 1s ease-in-out infinite"}}>
+            🏆 第{level.id}关胜利！
+          </div>
+          {level.id<7
+            ?<button className="brick-btn gold lg" style={{marginTop:12}}
+                onClick={()=>onVictory(playerHp)}>
+                下一关 →
+              </button>
+            :<button className="brick-btn gold lg" style={{marginTop:12}}
+                onClick={()=>onVictory(playerHp)}>
+                🎉 通关！查看结局
+              </button>}
+        </div>
+      )}
+
+      {/* 败北提示 */}
+      {phase==="lost"&&(
+        <div style={{textAlign:"center",padding:12}}>
+          <div style={{color:"#ff4444",fontFamily:"'Noto Sans SC',sans-serif",fontWeight:900,fontSize:"1.3rem"}}>
+            💀 力战而亡…
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════
+// 主游戏组件
+// ══════════════════════════════════════════════════════════
+function MonkeyKingGame(){
+  // ── 全局状态 ──
+  const [screen,setScreen]=useState("title"); // title|charSelect|workshop|levelMap|combat|victory|gameOver
+  const [playerChar,setPlayerChar]=useState("big"); // big|small
+  const [currentLevelId,setCurrentLevelId]=useState(1);
+  const [playerHp,setPlayerHp]=useState(1000);
+  const [clearedLevels,setClearedLevels]=useState([]);
+  const [isMusicPlaying,setIsMusicPlaying]=useState(false);
+
+  // ── 工坊（大猴子定制）状态 ──
+  const [build,setBuild]=useState({head:"h1",torso:"t1",leftArm:"la1",rightArm:"ra1",legs:"l1"});
+  const [customization,setCustomization]=useState({tail:"t_curl",staff:"s_gold",accessories:[]});
+  const [selectedZone,setSelectedZone]=useState("head");
+  const [creationName,setCreationName]=useState("我的悟空");
+  const [workshopMode,setWorkshopMode]=useState("build"); // build|scan|customize|showcase
+  const [scanProgress,setScanProgress]=useState(0);
+  const [isScanning,setIsScanning]=useState(false);
+  const [scanDone,setScanDone]=useState(false);
+  const [scanLog,setScanLog]=useState([]);
+  const [currentMove,setCurrentMove]=useState(null);
+  const [isAutoPerform,setIsAutoPerform]=useState(false);
+  const [savedCreations,setSavedCreations]=useState(()=>{
+    try{return JSON.parse(localStorage.getItem("bk_saves_v2")||"[]");}catch{return[];}
+  });
+  const [showSaveModal,setShowSaveModal]=useState(false);
+  const [showLoadModal,setShowLoadModal]=useState(false);
+  const autoRef=useRef(null);
+  const audio=useGameAudio();
+
+  const toggleMusic=()=>setIsMusicPlaying(p=>{if(!p)audio.startMusic();else audio.stopMusic();return!p;});
+
+  const currentLevel=LEVELS.find(l=>l.id===currentLevelId)||LEVELS[0];
+
+  const startGame=(charType)=>{
+    setPlayerChar(charType);
+    setPlayerHp(1000);
+    setClearedLevels([]);
+    setCurrentLevelId(1);
+    setScreen("levelMap");
+    audio.playClickSound();
+  };
+
+  const handleLevelVictory=(remainingHp)=>{
+    setClearedLevels(c=>[...new Set([...c,currentLevelId])]);
+    setPlayerHp(Math.min(1000,remainingHp+100)); // 关卡奖励 +100HP
+    if(currentLevelId>=7){setScreen("victory");}
+    else{setCurrentLevelId(id=>id+1);setScreen("levelMap");}
+  };
+
+  const handleDefeat=()=>{
+    setScreen("gameOver");
+  };
+
+  // 保存/加载
+  const saveCreation=()=>{
+    if(savedCreations.length>=5)return;
+    const c={id:Date.now(),name:creationName,build,customization,savedAt:new Date().toLocaleDateString("zh-CN")};
+    const updated=[...savedCreations,c];
+    setSavedCreations(updated);
+    try{localStorage.setItem("bk_saves_v2",JSON.stringify(updated));}catch(_){}
+    setShowSaveModal(false);audio.playSuccessSound();
+  };
+  const loadCreation=(c)=>{setBuild(c.build);setCustomization(c.customization);setCreationName(c.name);setShowLoadModal(false);};
+  const deleteCreation=(id)=>{const u=savedCreations.filter(c=>c.id!==id);setSavedCreations(u);try{localStorage.setItem("bk_saves_v2",JSON.stringify(u));}catch(_){}};
+
+  // 扫描
+  const startScan=()=>{
+    if(isScanning)return;
+    setIsScanning(true);setScanProgress(0);setScanLog([]);
+    audio.playScanSound();
+    const logs=["正在检测零件几何形状…","正在映射关节位置…","正在解析纹理图集…","正在生成角色网格…","✅ 扫描完成！"];
+    let step=0;
+    const iv=setInterval(()=>{
+      setScanProgress(p=>{
+        const next=Math.min(p+Math.random()*18+4,100);
+        if(next>=100){clearInterval(iv);setIsScanning(false);setScanDone(true);audio.playSuccessSound();setScanLog(l=>[...l,logs[4]]);}
+        return next;
+      });
+      if(step<logs.length-1){setScanLog(l=>[...l,logs[step]]);step++;}
+    },320);
+  };
+
+  const triggerMove=(m)=>{setCurrentMove(m.animClass);audio.playClickSound();};
+  const toggleAutoPerform=()=>setIsAutoPerform(a=>{
+    if(!a){let idx=0;autoRef.current=setInterval(()=>{setCurrentMove(MOVES[idx%MOVES.length].animClass);idx++;},1500);}
+    else{clearInterval(autoRef.current);setCurrentMove("anim-idle");}
+    return!a;
+  });
+
+  // 工坊零件选择
+  const selectPart=(zone,partId)=>{setBuild(b=>({...b,[zone]:partId}));audio.playClickSound();};
+  const selectZone=(zone)=>{setSelectedZone(zone);audio.playClickSound();};
+  const toggleAccessory=(id)=>{
+    setCustomization(c=>{
+      const has=c.accessories.includes(id);
+      return{...c,accessories:has?c.accessories.filter(a=>a!==id):[...c.accessories,id]};
+    });audio.playClickSound();
+  };
+
+  useEffect(()=>()=>{clearInterval(autoRef.current);audio.stopMusic();},[]);
+
+  // ════════════════════════════════════════════════════
+  // 渲染
+  // ════════════════════════════════════════════════════
+  return(
+    <>
+      <style>{STYLE_SHEET}</style>
+      <StarsBg/>
+      <div className="game-root" style={{position:"relative",zIndex:1}}>
+
+        {/* ── 通用页眉（非战斗界面）── */}
+        {screen!=="combat"&&(
+          <div style={{width:"100%",maxWidth:860,display:"flex",flexDirection:"column",
+            alignItems:"center",gap:8,padding:"16px 0 8px"}}>
+            <div style={{display:"flex",alignItems:"center",gap:12}}>
+              <span style={{fontSize:"2rem"}}>🐒</span>
+              <h1 className="game-title">砖块大王</h1>
+              <span style={{fontSize:"2rem"}}>👑</span>
+            </div>
+            <p style={{margin:0,color:"rgba(255,255,255,.4)",fontSize:".78rem",
+              fontWeight:700,letterSpacing:".08em"}}>
+              {screen==="title"&&"孙悟空传奇"}
+              {screen==="charSelect"&&"选择角色"}
+              {screen==="workshop"&&"工坊 · 定制外观"}
+              {screen==="levelMap"&&`选择关卡 · ${playerChar==="small"?"小猴子":"孙悟空"} HP ${playerHp}/1000`}
+              {screen==="victory"&&"🎉 恭喜通关！"}
+              {screen==="gameOver"&&"继续挑战！"}
+            </p>
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════
+            标题界面
+        ══════════════════════════════════════════ */}
+        {screen==="title"&&(
+          <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:24,padding:"30px 0"}}>
+            <div style={{display:"flex",gap:30,alignItems:"flex-end"}}>
+              <CharacterSVG build={build} customization={customization} animClass="anim-idle" size={160}/>
+              <SmallMonkeySVG animClass="anim-idle" size={42}/>
+            </div>
+            <div style={{color:"rgba(255,255,255,.5)",fontSize:".85rem",fontWeight:700,textAlign:"center"}}>
+              两位英雄 · 七大关卡 · 无数妖魔
+            </div>
+            <div style={{display:"flex",gap:12,flexWrap:"wrap",justifyContent:"center"}}>
+              <button className="brick-btn gold lg" onClick={()=>setScreen("charSelect")}>
+                ⚔️ 开始冒险
+              </button>
+              <button className="brick-btn dark md" onClick={()=>setScreen("workshop")}>
+                🔧 定制工坊
+              </button>
+              <button className="brick-btn dark md" onClick={toggleMusic}>
+                {isMusicPlaying?"🔇 关闭音乐":"🎵 开启音乐"}
+              </button>
+            </div>
+            <div className="panel" style={{padding:"12px 20px",maxWidth:460,width:"100%"}}>
+              <div style={{color:"rgba(255,215,0,.8)",fontWeight:900,fontSize:".82rem",marginBottom:6}}>
+                📖 关卡预览
+              </div>
+              {LEVELS.map(l=>(
+                <div key={l.id} style={{display:"flex",gap:8,color:"rgba(255,255,255,.5)",
+                  fontSize:".75rem",fontWeight:700,padding:"3px 0",borderBottom:"1px solid rgba(255,255,255,.05)"}}>
+                  <span style={{color:"rgba(255,215,0,.6)",minWidth:40}}>{l.subtitle}</span>
+                  <span>{l.name}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════
+            角色选择
+        ══════════════════════════════════════════ */}
+        {screen==="charSelect"&&(
+          <div style={{display:"flex",gap:20,flexWrap:"wrap",justifyContent:"center",padding:"20px 0"}}>
+            {/* 大猴子 */}
+            <div className="panel" style={{padding:20,textAlign:"center",maxWidth:320,
+              border:"2px solid rgba(255,215,0,.25)",cursor:"pointer",
+              transition:"all .2s"}}
+              onClick={()=>startGame("big")}>
+              <div style={{color:"rgba(255,215,0,.8)",fontWeight:900,fontSize:"1rem",marginBottom:8}}>
+                孙悟空（大猴子）
+              </div>
+              <CharacterSVG build={build} customization={customization} animClass="anim-idle" size={150}/>
+              <div style={{color:"rgba(255,255,255,.45)",fontSize:".75rem",fontWeight:700,margin:"8px 0"}}>
+                使用工坊中定制的外观
+              </div>
+              <div style={{display:"flex",justifyContent:"center",gap:6,flexWrap:"wrap",marginBottom:10}}>
+                <span className="tag">❤️ HP: 1000</span>
+                <span className="tag">⚔️ 攻击: 80-300</span>
+                <span className="tag">💪 成熟大圣</span>
+              </div>
+              <button className="brick-btn gold md" style={{width:"100%"}}>选择大猴子 →</button>
+            </div>
+
+            {/* 小猴子 */}
+            <div className="panel" style={{padding:20,textAlign:"center",maxWidth:320,
+              border:"2px solid rgba(160,100,255,.25)",cursor:"pointer",
+              transition:"all .2s"}}
+              onClick={()=>startGame("small")}>
+              <div style={{color:"#c084fc",fontWeight:900,fontSize:"1rem",marginBottom:8}}>
+                小猴子
+              </div>
+              {/* 展示大猴子旁边的小猴子高度 */}
+              <div style={{display:"flex",alignItems:"flex-end",justifyContent:"center",gap:16,marginBottom:8}}>
+                <CharacterSVG build={build} customization={customization} animClass="anim-idle" size={100}/>
+                <SmallMonkeySVG animClass="anim-idle" size={28}/>
+              </div>
+              <div style={{color:"rgba(255,255,255,.45)",fontSize:".75rem",fontWeight:700,marginBottom:4}}>
+                黑发 · 紫色眉毛 · 灵动双眸
+              </div>
+              <div style={{color:"rgba(192,132,252,.7)",fontSize:".72rem",fontWeight:700,marginBottom:8}}>
+                身高仅到大猴子小腿处
+              </div>
+              <div style={{display:"flex",justifyContent:"center",gap:6,flexWrap:"wrap",marginBottom:10}}>
+                <span className="tag">❤️ HP: 1000</span>
+                <span className="tag">⚔️ 攻击: 80-300</span>
+                <span className="tag">✨ 灵动小圣</span>
+              </div>
+              <button className="brick-btn purple md" style={{width:"100%"}}>选择小猴子 →</button>
+            </div>
+
+            <div style={{width:"100%",textAlign:"center",marginTop:8}}>
+              <button className="brick-btn dark sm" onClick={()=>setScreen("title")}>← 返回</button>
+            </div>
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════
+            关卡地图
+        ══════════════════════════════════════════ */}
+        {screen==="levelMap"&&(
+          <div style={{width:"100%",maxWidth:860,display:"flex",flexDirection:"column",gap:14}}>
+            <div className="panel" style={{padding:14,display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+              <div style={{display:"flex",alignItems:"flex-end",gap:8}}>
+                {playerChar==="small"
+                  ?<SmallMonkeySVG animClass="anim-idle" size={36}/>
+                  :<CharacterSVG build={build} customization={customization} animClass="anim-idle" size={70}/>}
+              </div>
+              <div style={{flex:1}}>
+                <div style={{fontWeight:900,color:"white",fontSize:".88rem",marginBottom:4}}>
+                  {playerChar==="small"?"小猴子":"孙悟空"}
+                </div>
+                <HPBar current={playerHp} max={1000} isPlayer height={14}/>
+                <div style={{fontSize:".7rem",color:"rgba(255,255,255,.5)",fontWeight:700,marginTop:2}}>
+                  HP: {playerHp}/1000 · 已通关: {clearedLevels.length}/7
+                </div>
+              </div>
+            </div>
+
+            <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:8}}>
+              {LEVELS.map(l=>{
+                const cleared=clearedLevels.includes(l.id);
+                const unlocked=l.id===1||clearedLevels.includes(l.id-1)||cleared;
+                const isCurrent=l.id===currentLevelId;
+                return(
+                  <div key={l.id}
+                    className={`level-map-btn ${cleared?"cleared":unlocked?"unlocked":"locked"}`}
+                    style={{opacity:unlocked?1:.5,
+                      boxShadow:isCurrent?"0 0 20px rgba(255,215,0,.5)":undefined,
+                      borderColor:isCurrent?"var(--gold)":undefined}}
+                    onClick={()=>{if(unlocked){setCurrentLevelId(l.id);setScreen("combat");}}}>
+                    <div style={{fontSize:"1.3rem"}}>{cleared?"✅":unlocked?"⚔️":"🔒"}</div>
+                    <div style={{fontSize:".65rem",marginTop:3,color:"rgba(255,215,0,.8)"}}>{l.subtitle}</div>
+                    <div style={{fontSize:".62rem",marginTop:2,color:"rgba(255,255,255,.6)",
+                      lineHeight:1.2}}>{l.name}</div>
+                    <div style={{fontSize:".58rem",marginTop:4,color:"rgba(255,255,255,.35)"}}>
+                      Boss HP: {l.enemies.reduce((s,e)=>s+e.maxHp,0)}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div style={{display:"flex",gap:8,justifyContent:"center"}}>
+              {currentLevelId<=7&&(clearedLevels.includes(currentLevelId-1)||currentLevelId===1)&&(
+                <button className="brick-btn gold lg" onClick={()=>setScreen("combat")}>
+                  ⚔️ 进入第{currentLevelId}关
+                </button>
+              )}
+              <button className="brick-btn dark md" onClick={()=>setScreen("title")}>← 主菜单</button>
+            </div>
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════
+            战斗界面
+        ══════════════════════════════════════════ */}
+        {screen==="combat"&&(
+          <CombatScreen
+            level={currentLevel}
+            playerChar={playerChar}
+            bigBuild={build}
+            bigCustom={customization}
+            playerHp={playerHp}
+            setPlayerHp={setPlayerHp}
+            onVictory={handleLevelVictory}
+            onDefeat={handleDefeat}
+            audio={audio}
+          />
+        )}
+
+        {/* ══════════════════════════════════════════
+            通关胜利
+        ══════════════════════════════════════════ */}
+        {screen==="victory"&&(
+          <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:20,padding:"30px 0",textAlign:"center"}}>
+            <div style={{fontFamily:"'Noto Sans SC',sans-serif",fontWeight:900,fontSize:"2rem",
+              color:"#FFD700",animation:"victoryBounce 1s ease-in-out infinite"}}>
+              🎉 恭喜通关七大关！
+            </div>
+            <div style={{color:"rgba(255,255,255,.7)",fontSize:".9rem",fontWeight:700}}>
+              {playerChar==="small"?"小猴子":"孙悟空"}以最终{Math.max(0,playerHp)}点生命值击败了白骨夫人！
+            </div>
+            <div style={{display:"flex",gap:20,alignItems:"flex-end",justifyContent:"center"}}>
+              {playerChar==="small"
+                ?<SmallMonkeySVG animClass="anim-victory" size={90}/>
+                :<CharacterSVG build={build} customization={customization} animClass="anim-victory" size={180}/>}
+            </div>
+            <div style={{display:"flex",gap:10,flexWrap:"wrap",justifyContent:"center"}}>
+              <button className="brick-btn gold lg" onClick={()=>{setScreen("charSelect");setPlayerHp(1000);setClearedLevels([]);}}>
+                🔄 再次挑战
+              </button>
+              <button className="brick-btn dark md" onClick={()=>setScreen("title")}>← 主菜单</button>
+            </div>
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════
+            游戏失败
+        ══════════════════════════════════════════ */}
+        {screen==="gameOver"&&(
+          <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:20,padding:"30px 0",textAlign:"center"}}>
+            <div style={{fontFamily:"'Noto Sans SC',sans-serif",fontWeight:900,fontSize:"2rem",color:"#ff4444"}}>
+              💀 战败了！
+            </div>
+            <div style={{color:"rgba(255,255,255,.6)",fontSize:".88rem",fontWeight:700}}>
+              倒在了{currentLevel.name}…但英雄永不放弃！
+            </div>
+            <div style={{display:"flex",gap:10,flexWrap:"wrap",justifyContent:"center"}}>
+              <button className="brick-btn red lg" onClick={()=>{setPlayerHp(1000);setClearedLevels([]);setCurrentLevelId(1);setScreen("levelMap");}}>
+                🔄 重新挑战
+              </button>
+              <button className="brick-btn dark md" onClick={()=>setScreen("charSelect")}>
+                重新选角
+              </button>
+              <button className="brick-btn dark md" onClick={()=>setScreen("title")}>← 主菜单</button>
+            </div>
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════
+            工坊（原建造/扫描/定制/展示）
+        ══════════════════════════════════════════ */}
+        {screen==="workshop"&&(
+          <>
+            {/* 工坊导航 */}
+            <div style={{width:"100%",maxWidth:860,display:"flex",flexDirection:"column",alignItems:"center",gap:8,marginBottom:8}}>
+              <div className="nav-bar">
+                {[{id:"build",label:"建造",emoji:"🧱"},{id:"scan",label:"扫描",emoji:"🔬"},
+                  {id:"customize",label:"定制",emoji:"🎨"},{id:"showcase",label:"展示",emoji:"🎭"}].map(n=>(
+                  <button key={n.id} className={`nav-btn ${workshopMode===n.id?"active":""}`}
+                    onClick={()=>{setWorkshopMode(n.id);audio.playClickSound();}}>
+                    <span>{n.emoji}</span><span>{n.label}</span>
+                    {n.id==="build"&&Object.values(build).filter(Boolean).length<5&&<span className="badge">!</span>}
+                  </button>
+                ))}
+              </div>
+              <div className="hint-bar" style={{maxWidth:600,width:"100%"}}>
+                <span>💡</span>
+                <span>{workshopMode==="build"?"点击身体区域选择零件"
+                  :workshopMode==="scan"?"扫描你的作品"
+                  :workshopMode==="customize"?"添加定制配件"
+                  :"展示你的美猴王！"}</span>
+              </div>
+            </div>
+
+            {/* 建造模式 */}
+            {workshopMode==="build"&&(
+              <div style={{width:"100%",maxWidth:860,display:"flex",flexDirection:"column",gap:12}}>
+                <div className="build-layout">
+                  <div className="panel" style={{padding:16,display:"flex",flexDirection:"column",gap:10}}>
+                    <div className="section-label">身体区域</div>
+                    <div className="zone-grid">
+                      {ZONE_CONFIG.map(z=>(
+                        <button key={z.id}
+                          className={`zone-btn${build[z.id]?" filled":""}${selectedZone===z.id?" selected":""}`}
+                          style={{gridArea:z.area}}
+                          onClick={()=>selectZone(z.id)}>
+                          <span style={{fontSize:"1.3rem"}}>
+                            {build[z.id]?(PARTS_CATALOG[z.id]?.find(p=>p.id===build[z.id])?.emoji||z.emoji):z.emoji}
+                          </span>
+                          <span>{build[z.id]?PARTS_CATALOG[z.id]?.find(p=>p.id===build[z.id])?.name?.split(/\s|（/)[0]:z.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8}}>
+                    <div className="char-frame panel" style={{padding:20}}>
+                      <CharacterSVG build={build} customization={customization} animClass="anim-idle" size={170}/>
+                    </div>
+                    <div className="char-name-badge">{creationName}</div>
+                    <div style={{display:"flex",gap:6}}>
+                      <button className="brick-btn gold sm" onClick={()=>setShowSaveModal(true)}>💾 保存</button>
+                      <button className="brick-btn dark sm" onClick={()=>setShowLoadModal(true)}>📂 加载</button>
+                    </div>
+                  </div>
+                  <div className="panel" style={{padding:16,display:"flex",flexDirection:"column",gap:10}}>
+                    <div className="section-label">{ZONE_CONFIG.find(z=>z.id===selectedZone)?.label} 零件</div>
+                    <div className="parts-palette">
+                      {(PARTS_CATALOG[selectedZone]||[]).map(part=>(
+                        <div key={part.id}
+                          className={`part-tile${build[selectedZone]===part.id?" selected":""}`}
+                          onClick={()=>selectPart(selectedZone,part.id)}>
+                          <div style={{fontSize:"2rem"}}>{part.emoji}</div>
+                          <div style={{fontSize:".7rem",fontWeight:900,color:"white",marginTop:3}}>{part.name}</div>
+                          <div style={{fontSize:".6rem",color:"rgba(255,255,255,.4)",marginTop:1}}>{part.label}</div>
+                          {build[selectedZone]===part.id&&<div style={{fontSize:".65rem",color:"#FFD700",fontWeight:900,marginTop:4}}>✓ 已装备</div>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <div style={{display:"flex",justifyContent:"center",gap:8}}>
+                  <button className="brick-btn gold lg" onClick={()=>setWorkshopMode("scan")}>🔬 扫描 →</button>
+                  <button className="brick-btn dark md" onClick={()=>setScreen("title")}>← 返回主菜单</button>
+                </div>
+              </div>
+            )}
+
+            {/* 扫描模式 */}
+            {workshopMode==="scan"&&(
+              <div style={{width:"100%",maxWidth:600,display:"flex",flexDirection:"column",alignItems:"center",gap:14}}>
+                <div className="panel" style={{width:"100%",padding:28,background:"rgba(0,10,20,.7)"}}>
+                  <div style={{textAlign:"center",marginBottom:16}}>
+                    <div style={{fontFamily:"'Noto Sans SC',cursive",fontWeight:900,fontSize:"1.3rem",color:"var(--sky)"}}>
+                      {isScanning?"⚡ 扫描进行中…":scanDone?"✅ 扫描完成！":"🔬 准备扫描"}
+                    </div>
+                  </div>
+                  <div style={{position:"relative",display:"flex",justifyContent:"center",marginBottom:16}}>
+                    <CharacterSVG build={build} customization={customization} animClass={isScanning?"":"anim-idle"} size={180}/>
+                    {isScanning&&<div className="scan-line"/>}
+                  </div>
+                  <div className="progress-bar-track" style={{marginBottom:10}}>
+                    <div className="progress-bar-fill" style={{width:`${scanProgress}%`}}/>
+                  </div>
+                  <div style={{textAlign:"right",fontSize:".72rem",color:"var(--sky)",fontWeight:800,marginBottom:14}}>
+                    {Math.round(scanProgress)}%
+                  </div>
+                  <div style={{background:"rgba(0,0,0,.4)",borderRadius:10,padding:"10px 14px",
+                    fontFamily:"monospace",fontSize:".72rem",color:"var(--jade)",minHeight:80,marginBottom:16}}>
+                    {scanLog.length===0&&<span style={{color:"rgba(255,255,255,.2)"}}>{">"} 等待扫描指令…</span>}
+                    {scanLog.map((l,i)=><div key={i} style={{color:l.startsWith("✅")?"#FFD700":"#3CB371"}}>{"> "}{l}</div>)}
+                  </div>
+                  <div style={{display:"flex",gap:10,justifyContent:"center"}}>
+                    {!scanDone
+                      ?<button className="brick-btn sky lg" onClick={startScan} disabled={isScanning} style={{opacity:isScanning?.6:1}}>
+                          {isScanning?"⏳ 扫描中…":"🔬 开始扫描"}
+                        </button>
+                      :<>
+                          <button className="brick-btn gold lg" onClick={()=>setWorkshopMode("customize")}>🎨 定制 →</button>
+                          <button className="brick-btn dark md" onClick={()=>{setScanDone(false);setScanProgress(0);setScanLog([]);}}>🔄 重扫</button>
+                        </>}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 定制模式 */}
+            {workshopMode==="customize"&&(
+              <div style={{width:"100%",maxWidth:820,display:"grid",gridTemplateColumns:"1fr 220px",gap:14}}>
+                <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                  <div className="panel" style={{padding:16}}>
+                    <div className="section-label">🌀 尾巴样式</div>
+                    <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                      {CUSTOM_CATALOG.tail.map(t=>(
+                        <div key={t.id} className={`custom-option${customization.tail===t.id?" active":""}`}
+                          style={{flex:"1 1 80px",minWidth:80}}
+                          onClick={()=>{setCustomization(c=>({...c,tail:t.id}));audio.playClickSound();}}>
+                          <div style={{fontSize:"1.8rem"}}>{t.emoji}</div>
+                          <div style={{fontSize:".72rem",fontWeight:800,marginTop:4}}>{t.name}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="panel" style={{padding:16}}>
+                    <div className="section-label">⚔️ 武器款式</div>
+                    <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                      {CUSTOM_CATALOG.staff.map(s=>(
+                        <div key={s.id} className={`custom-option${customization.staff===s.id?" active":""}`}
+                          style={{flex:"1 1 80px",minWidth:80}}
+                          onClick={()=>{setCustomization(c=>({...c,staff:s.id}));audio.playClickSound();}}>
+                          <div style={{fontSize:"1.8rem"}}>{s.emoji}</div>
+                          <div style={{fontSize:".72rem",fontWeight:800,marginTop:4}}>{s.name}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="panel" style={{padding:16}}>
+                    <div className="section-label">✨ 配件（可多选）</div>
+                    <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                      {CUSTOM_CATALOG.accessories.map(a=>(
+                        <div key={a.id} className={`custom-option${customization.accessories.includes(a.id)?" active":""}`}
+                          style={{flex:"1 1 80px",minWidth:80}}
+                          onClick={()=>toggleAccessory(a.id)}>
+                          <div style={{fontSize:"1.8rem"}}>{a.emoji}</div>
+                          <div style={{fontSize:".72rem",fontWeight:800,marginTop:4}}>{a.name}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="panel" style={{padding:16}}>
+                    <div className="section-label">📛 作品名称</div>
+                    <input className="game-input" value={creationName}
+                      onChange={e=>setCreationName(e.target.value)} placeholder="给你的美猴王取名…" maxLength={24}/>
+                  </div>
+                  <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+                    <button className="brick-btn dark md" onClick={()=>setWorkshopMode("build")}>← 返回建造</button>
+                    <button className="brick-btn gold lg" onClick={()=>setWorkshopMode("showcase")}>🎭 展示 →</button>
+                  </div>
+                </div>
+                <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:10}}>
+                  <div className="section-label" style={{textAlign:"center"}}>实时预览</div>
+                  <div className="char-frame panel" style={{padding:16,width:"100%"}}>
+                    <CharacterSVG build={build} customization={customization} animClass="anim-idle" size={170}/>
+                  </div>
+                  <div className="char-name-badge" style={{textAlign:"center"}}>{creationName}</div>
+                  <button className="brick-btn jade sm" onClick={()=>setShowSaveModal(true)}>💾 保存</button>
+                </div>
+              </div>
+            )}
+
+            {/* 展示模式 */}
+            {workshopMode==="showcase"&&(
+              <div style={{width:"100%",maxWidth:820,display:"flex",flexDirection:"column",gap:12}}>
+                <div className="stage-bg" style={{padding:20,minHeight:340,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-end",gap:8}}>
+                  <div className="stage-spotlight"/><div className="stage-floor"/>
+                  <div style={{position:"relative",zIndex:2,display:"flex",flexDirection:"column",alignItems:"center",gap:6}}>
+                    <CharacterSVG build={build} customization={customization} animClass={currentMove||"anim-idle"} size={220}/>
+                    <div className="char-name-badge" style={{textAlign:"center"}}>{creationName}</div>
+                  </div>
+                </div>
+                <div className="panel" style={{padding:14,display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+                  <button className={`brick-btn ${isMusicPlaying?"red":"dark"} md`} onClick={toggleMusic} style={{minWidth:100}}>
+                    {isMusicPlaying?<><span>🔇</span><div className="music-wave">{[1,2,3,4,5].map(i=><div key={i} className="music-bar" style={{"--d":`${0.3+i*.08}s`,animationDelay:`${i*.06}s`}}/>)}</div></>:"🎵 音乐"}
+                  </button>
+                  <button className={`brick-btn ${isAutoPerform?"jade":"dark"} md`} onClick={toggleAutoPerform}>
+                    {isAutoPerform?"⏹ 停止":"▶ 自动"}
+                  </button>
+                  <button className="brick-btn dark sm" onClick={()=>{setCurrentMove("anim-idle");setIsAutoPerform(false);clearInterval(autoRef.current);}}>😌 待机</button>
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8}}>
+                  {MOVES.map(m=>(
+                    <button key={m.id} className={`move-btn${currentMove===m.animClass?" active":""}`}
+                      onClick={()=>{triggerMove(m);setIsAutoPerform(false);clearInterval(autoRef.current);}}>
+                      <span style={{fontSize:"1.5rem"}}>{m.emoji}</span>
+                      <span style={{fontSize:".7rem"}}>{m.name}</span>
+                    </button>
+                  ))}
+                </div>
+                <div style={{display:"flex",gap:8,justifyContent:"center"}}>
+                  <button className="brick-btn dark md" onClick={()=>setWorkshopMode("customize")}>← 定制</button>
+                  <button className="brick-btn gold md" onClick={()=>setShowSaveModal(true)}>💾 保存</button>
+                  <button className="brick-btn dark md" onClick={()=>setScreen("title")}>← 主菜单</button>
+                </div>
+              </div>
+            )}
+
+            {/* 保存弹窗 */}
+            {showSaveModal&&(
+              <div className="modal-overlay" onClick={()=>setShowSaveModal(false)}>
+                <div className="modal-box" onClick={e=>e.stopPropagation()}>
+                  <div style={{fontFamily:"'Noto Sans SC',sans-serif",fontWeight:900,fontSize:"1.3rem",color:"#FFD700",marginBottom:14}}>💾 保存作品</div>
+                  <div style={{marginBottom:10}}>
+                    <div className="section-label">作品名称</div>
+                    <input className="game-input" value={creationName} onChange={e=>setCreationName(e.target.value)} placeholder="给你的美猴王取名…" maxLength={24}/>
+                  </div>
+                  <div style={{display:"flex",justifyContent:"center",marginBottom:14}}>
+                    <CharacterSVG build={build} customization={customization} animClass="anim-idle" size={100}/>
+                  </div>
+                  <div style={{color:"rgba(255,255,255,.4)",fontSize:".72rem",marginBottom:14}}>已使用槽位：{savedCreations.length}/5</div>
+                  <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+                    <button className="brick-btn dark md" onClick={()=>setShowSaveModal(false)}>取消</button>
+                    <button className="brick-btn gold md" onClick={saveCreation} disabled={savedCreations.length>=5}>保存</button>
+                  </div>
+                </div>
+              </div>
+            )}
+            {/* 加载弹窗 */}
+            {showLoadModal&&(
+              <div className="modal-overlay" onClick={()=>setShowLoadModal(false)}>
+                <div className="modal-box" onClick={e=>e.stopPropagation()}>
+                  <div style={{fontFamily:"'Noto Sans SC',sans-serif",fontWeight:900,fontSize:"1.3rem",color:"#FFD700",marginBottom:14}}>📂 已保存作品</div>
+                  {savedCreations.length===0&&<div style={{color:"rgba(255,255,255,.35)",textAlign:"center",padding:"20px 0"}}>还没有保存—快去建造吧！</div>}
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:14}}>
+                    {savedCreations.map(c=>(
+                      <div key={c.id} style={{position:"relative"}}>
+                        <div className="save-card" onClick={()=>loadCreation(c)}>
+                          <CharacterSVG build={c.build} customization={c.customization} animClass="" size={60}/>
+                          <div style={{fontSize:".72rem",fontWeight:800,color:"white",marginTop:4,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.name}</div>
+                          <div style={{fontSize:".6rem",color:"rgba(255,255,255,.35)"}}>{c.savedAt}</div>
+                        </div>
+                        <button onClick={()=>deleteCreation(c.id)}
+                          style={{position:"absolute",top:-4,right:-4,background:"#E8372A",border:"none",borderRadius:"50%",width:18,height:18,fontSize:10,color:"white",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{display:"flex",justifyContent:"flex-end"}}>
+                    <button className="brick-btn dark md" onClick={()=>setShowLoadModal(false)}>关闭</button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </>
+  );
+}
+
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<MonkeyKingGame/>);
+  </script>
+</body>
+</html>
